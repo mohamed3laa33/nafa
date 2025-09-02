@@ -67,13 +67,27 @@ async function handler(req: AuthenticatedRequest) {
       const stockId = await upsertStock(r.ticker, userId);
       const callId = uuidv4();
       const stop = Number((r.entry * 0.9).toFixed(4));
-      await pool.execute(
-        `INSERT INTO stock_calls
-           (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
-         VALUES
-           (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, 'buy', ?)`,
-        [callId, stockId, userId, r.entry, stop, r.target, isPublic ? 1 : 0]
-      );
+      try {
+        await pool.execute(
+          `INSERT INTO stock_calls
+             (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
+           VALUES
+             (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, 'buy', ?)`,
+          [callId, stockId, userId, r.entry, stop, r.target, isPublic ? 1 : 0]
+        );
+      } catch (e: any) {
+        if (String(e?.code) === 'ER_BAD_FIELD_ERROR' || /unknown column 'type'/i.test(String(e?.message))) {
+          await pool.execute(
+            `INSERT INTO stock_calls
+               (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, is_public)
+             VALUES
+               (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, ?)`,
+            [callId, stockId, userId, r.entry, stop, r.target, isPublic ? 1 : 0]
+          );
+        } else {
+          throw e;
+        }
+      }
       await pool.execute("UPDATE stocks SET status='active' WHERE id=?", [stockId]);
       results.push({ ticker: r.ticker, stockId, callId });
     } catch (e: unknown) {

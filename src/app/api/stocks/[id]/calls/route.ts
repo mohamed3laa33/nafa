@@ -16,9 +16,8 @@ async function getCalls(
 
   let sql = `SELECT
        id,
-       stock_id,
-       opened_by_user_id,
-       type,
+        stock_id,
+        opened_by_user_id,
        entry        AS entry_price,
        stop         AS stop_loss,
        t1           AS target_price,
@@ -144,13 +143,29 @@ async function openCall(
 
   const callId = uuidv4();
 
-  await pool.execute(
-    `INSERT INTO stock_calls
-       (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
-     VALUES
-       (?,  ?,        ?,                ?,     ?,   ?,  ?,  ?,  ?,             'open', NOW(),   ?,    ?,    ?)`,
-    [callId, stockId, userId, entry, stop, t1, t2, t3, horizon_days, notes, callType, is_public]
-  );
+  // Insert with fallback if `type` column does not exist
+  try {
+    await pool.execute(
+      `INSERT INTO stock_calls
+         (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
+       VALUES
+         (?,  ?,        ?,                ?,     ?,   ?,  ?,  ?,  ?,             'open', NOW(),   ?,    ?,    ?)`,
+      [callId, stockId, userId, entry, stop, t1, t2, t3, horizon_days, notes, callType, is_public]
+    );
+  } catch (e: any) {
+    // Retry without `type` if column missing
+    if (String(e?.code) === 'ER_BAD_FIELD_ERROR' || /unknown column 'type'/i.test(String(e?.message))) {
+      await pool.execute(
+        `INSERT INTO stock_calls
+           (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, is_public)
+         VALUES
+           (?,  ?,        ?,                ?,     ?,   ?,  ?,  ?,  ?,             'open', NOW(),   ?,    ?)`,
+        [callId, stockId, userId, entry, stop, t1, t2, t3, horizon_days, notes, is_public]
+      );
+    } else {
+      throw e;
+    }
+  }
   await pool.execute(
   "UPDATE stocks SET status = 'active' WHERE id = ?",
   [stockId]

@@ -49,13 +49,27 @@ async function handler(req: AuthenticatedRequest) {
     const stockId = await upsertStock(ticker, userId);
     const callId = uuidv4();
     const stop = Number((entry_price * 0.9).toFixed(4)); // default 10% below entry
-    await pool.execute(
-      `INSERT INTO stock_calls
-         (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
-       VALUES
-         (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, 'buy', ?)`,
-      [callId, stockId, userId, entry_price, stop, target_price, is_public ? 1 : 0]
-    );
+    try {
+      await pool.execute(
+        `INSERT INTO stock_calls
+           (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
+         VALUES
+           (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, 'buy', ?)`,
+        [callId, stockId, userId, entry_price, stop, target_price, is_public ? 1 : 0]
+      );
+    } catch (e: any) {
+      if (String(e?.code) === 'ER_BAD_FIELD_ERROR' || /unknown column 'type'/i.test(String(e?.message))) {
+        await pool.execute(
+          `INSERT INTO stock_calls
+             (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, is_public)
+           VALUES
+             (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, ?)`,
+          [callId, stockId, userId, entry_price, stop, target_price, is_public ? 1 : 0]
+        );
+      } else {
+        throw e;
+      }
+    }
     await pool.execute("UPDATE stocks SET status='active' WHERE id=?", [stockId]);
     return NextResponse.json({ stockId, callId });
   } catch (e: unknown) {

@@ -19,6 +19,7 @@ interface Call {
   opened_at: string;
   closed_at?: string | null;
   is_public?: 0 | 1 | boolean;
+  opened_by_user_id?: string | number;
 }
 
 interface CallsTabProps {
@@ -271,7 +272,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
                 <td className="py-2 pr-4">{!c.stop_loss || c.stop_loss === 0 ? '-' : c.stop_loss}</td>
                 <td className="py-2 pr-4">{fdate(c.opened_at)}</td>
                 <td className="py-2 pr-4">{c.note ?? "-"}</td>
-                {isOwner && (
+                {(user?.role === 'admin' || String(user?.id) === String(c.opened_by_user_id)) && (
                   <td className="py-2 pr-4 space-x-2">
                     <button
                       onClick={async () => {
