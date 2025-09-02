@@ -325,8 +325,19 @@ export default function CallsPage() {
 
                     const entryStatus =
                       entry != null && current != null ? (current >= entry ? "✅ Above Entry" : "❌ Below Entry") : "—";
-                    const targetStatus =
-                      target != null && current != null ? (current >= target ? "🌟 At/Above Target" : "🌟 Below Target") : "—";
+                    const targetStatus = (() => {
+                      if (target == null || current == null) return "—";
+                      if (target === 0) return "—";
+                      const diffPct = ((current - target) / target) * 100;
+                      if (Math.abs(diffPct) < 0.5) return "✅ Near Target";
+                      return diffPct >= 0 ? "✅ At/Above Target" : "⬇️ Below Target";
+                    })();
+                    const targetClass = (() => {
+                      if (target == null || current == null || target === 0) return "";
+                      if (current >= target) return "text-green-600 font-medium";
+                      // Below target
+                      return "text-amber-600 font-medium";
+                    })();
 
                     return (
                       <tr key={id} className="hover:bg-gray-50">
@@ -340,11 +351,11 @@ export default function CallsPage() {
                           earningsPct == null
                             ? ''
                             : earningsPct >= 0
-                            ? 'text-green-600 font-medium'
-                            : 'text-red-600 font-medium'
+                            ? 'bg-green-100 font-medium'
+                            : 'bg-red-100 font-medium'
                         }`}>{fmt(earningsPct)}</td>
                         <td className="p-2 border whitespace-nowrap">{entryStatus}</td>
-                        <td className="p-2 border whitespace-nowrap">{targetStatus}</td>
+                        <td className={`p-2 border whitespace-nowrap ${targetClass}`}>{targetStatus}</td>
                         <td className="p-2 border">
                           <Buzz t={ticker} />
                         </td>
