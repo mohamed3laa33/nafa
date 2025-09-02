@@ -36,6 +36,8 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
   const [targetPrice, setTargetPrice] = useState("");
   const [stopLoss, setStopLoss] = useState("");
   const [note, setNote] = useState("");
+  const [isFundamental, setIsFundamental] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
 
   // stable date formatter (UTC, en-GB to avoid hydration mismatch)
   const fmt = new Intl.DateTimeFormat("en-GB", {
@@ -76,18 +78,26 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
   const handleOpenCall = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const payload = {
-      type,
-      entry_price: parseFloat(entryPrice),
-      target_price: targetPrice ? parseFloat(targetPrice) : null,
-      stop_loss: stopLoss ? parseFloat(stopLoss) : null,
-      note: note.trim() || undefined,
-    };
-
-    if (!payload.entry_price || Number.isNaN(payload.entry_price)) {
-      setError("Entry price is required and must be a number.");
-      return;
+    let payload: any;
+    if (isFundamental) {
+      payload = {
+        type,
+        is_public: isPublic,
+        note: note.trim() || undefined,
+      };
+    } else {
+      payload = {
+        type,
+        entry_price: parseFloat(entryPrice),
+        target_price: targetPrice ? parseFloat(targetPrice) : null,
+        stop_loss: stopLoss ? parseFloat(stopLoss) : null,
+        is_public: isPublic,
+        note: note.trim() || undefined,
+      };
+      if (!payload.entry_price || Number.isNaN(payload.entry_price)) {
+        setError("Entry price is required and must be a number.");
+        return;
+      }
     }
 
     try {
@@ -109,6 +119,8 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
       setTargetPrice("");
       setStopLoss("");
       setNote("");
+      setIsFundamental(false);
+      setIsPublic(false);
       await fetchCalls();
     } catch {
       setError("An unexpected error occurred while opening the call.");
@@ -153,6 +165,16 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
       {isOwner && (
         <form onSubmit={handleOpenCall} className="mb-8 p-4 border rounded-lg space-y-4">
           <h3 className="text-xl font-bold">Open New Call</h3>
+          <div className="flex items-center gap-6 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" checked={isFundamental} onChange={(e) => setIsFundamental(e.target.checked)} />
+              Fundamental (no entry/target)
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+              Public
+            </label>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
@@ -175,8 +197,9 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
                 value={entryPrice}
                 onChange={(e) => setEntryPrice(e.target.value)}
                 placeholder="e.g. 10.50"
-                className="w-full p-2 border rounded"
-                required
+                className="w-full p-2 border rounded disabled:opacity-60"
+                required={!isFundamental}
+                disabled={isFundamental}
               />
             </div>
 
@@ -188,7 +211,8 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
                 value={targetPrice}
                 onChange={(e) => setTargetPrice(e.target.value)}
                 placeholder="e.g. 11.20"
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded disabled:opacity-60"
+                disabled={isFundamental}
               />
             </div>
 
@@ -200,7 +224,8 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
                 value={stopLoss}
                 onChange={(e) => setStopLoss(e.target.value)}
                 placeholder="e.g. 9.80"
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded disabled:opacity-60"
+                disabled={isFundamental}
               />
             </div>
 
@@ -240,9 +265,9 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
             {openCalls.map((c) => (
               <tr key={c.id} className="border-b">
                 <td className="py-2 pr-4 capitalize">{c.type}</td>
-                <td className="py-2 pr-4">{c.entry_price}</td>
-                <td className="py-2 pr-4">{c.target_price ?? "-"}</td>
-                <td className="py-2 pr-4">{c.stop_loss ?? "-"}</td>
+                <td className="py-2 pr-4">{!c.entry_price || c.entry_price === 0 ? '-' : c.entry_price}</td>
+                <td className="py-2 pr-4">{!c.target_price || c.target_price === 0 ? '-' : c.target_price}</td>
+                <td className="py-2 pr-4">{!c.stop_loss || c.stop_loss === 0 ? '-' : c.stop_loss}</td>
                 <td className="py-2 pr-4">{fdate(c.opened_at)}</td>
                 <td className="py-2 pr-4">{c.note ?? "-"}</td>
                 {isOwner && (
@@ -306,9 +331,9 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
             {closedCalls.map((c) => (
               <tr key={c.id} className="border-b">
                 <td className="py-2 pr-4 capitalize">{c.type}</td>
-                <td className="py-2 pr-4">{c.entry_price}</td>
-                <td className="py-2 pr-4">{c.target_price ?? "-"}</td>
-                <td className="py-2 pr-4">{c.stop_loss ?? "-"}</td>
+                <td className="py-2 pr-4">{!c.entry_price || c.entry_price === 0 ? '-' : c.entry_price}</td>
+                <td className="py-2 pr-4">{!c.target_price || c.target_price === 0 ? '-' : c.target_price}</td>
+                <td className="py-2 pr-4">{!c.stop_loss || c.stop_loss === 0 ? '-' : c.stop_loss}</td>
                 <td className="py-2 pr-4">{fdate(c.opened_at)}</td>
                 <td className="py-2 pr-4">{c.outcome ?? "-"}</td>
                 <td className="py-2 pr-4">{c.result_pct ?? "-"}</td>
