@@ -117,6 +117,15 @@ export default function CallsPage() {
   const [query, setQuery] = useState("");
   const [searchTicker, setSearchTicker] = useState<string>("");
 
+  // Debounce ticker search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const q = query.trim().toUpperCase();
+      setSearchTicker(q);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [query]);
+
   // CLOSED
   const [closedRows, setClosedRows] = useState<ClosedCallNorm[]>([]);
   const [closedLoading, setClosedLoading] = useState(true);
