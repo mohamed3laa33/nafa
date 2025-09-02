@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/app/AuthContext";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const PriceSparkline = dynamic(() => import("@/components/PriceSparkline"), { ssr: false });
 
@@ -126,6 +128,7 @@ export default function CallsPage() {
   // SEARCH
   const [query, setQuery] = useState("");
   const [searchTicker, setSearchTicker] = useState<string>("");
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   // Debounce ticker search input
   useEffect(() => {
@@ -143,6 +146,7 @@ export default function CallsPage() {
 
   // ========== OPEN: initial load ==========
   useEffect(() => {
+    let canceled = false;
     (async () => {
       setLoading(true);
       setErr("");
@@ -153,22 +157,19 @@ export default function CallsPage() {
         if (!rs.ok) throw new Error(js.error || "Failed to load stocks");
         const calls: OpenCall[] = Array.isArray(js) ? js : [];
 
-        const items = await Promise.all(
-          calls.map(async (call) => {
-            if (!call.ticker) return null;
-            const px = await fetchPrice(call.ticker);
-            return {
-              id: call.stock_id,
-              ticker: call.ticker,
-              entry: toNum(call.entry),
-              target: toNum(call.t1),
-              current: px,
-              openedAt: call.opened_at ?? null,
-              openedBy: call.opened_by ?? null,
-              openedById: call.opened_by_id ?? null,
-            } as OpenRow;
-          })
-        );
+        const items = calls.map((call) => {
+          if (!call.ticker) return null;
+          return {
+            id: call.stock_id as string,
+            ticker: call.ticker as string,
+            entry: toNum(call.entry),
+            target: toNum(call.t1),
+            current: null,
+            openedAt: call.opened_at ?? null,
+            openedBy: call.opened_by ?? null,
+            openedById: call.opened_by_id ?? null,
+          } as OpenRow;
+        });
 
         // De-duplicate by stock id to avoid duplicate React keys when multiple open calls exist per stock
         const deduped = Array.from(
@@ -176,6 +177,22 @@ export default function CallsPage() {
             .values()
         );
         setRows(deduped);
+        // Fetch prices in small batches without blocking UI
+        (async () => {
+          const tickers = deduped.map((r) => r.ticker);
+          const batchSize = 6;
+          for (let i = 0; i < tickers.length; i += batchSize) {
+            if (canceled) break;
+            const batch = tickers.slice(i, i + batchSize);
+            const prices = await Promise.all(batch.map((t) => fetchPrice(t)));
+            if (canceled) break;
+            setRows((prev) => prev.map((row) => {
+              const idx = batch.indexOf(row.ticker);
+              return idx >= 0 ? { ...row, current: prices[idx] ?? row.current } : row;
+            }));
+            await sleep(0);
+          }
+        })();
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : "Failed to load";
         setErr(message);
@@ -183,18 +200,27 @@ export default function CallsPage() {
         setLoading(false);
       }
     })();
+    return () => { canceled = true; };
   }, [searchTicker]);
 
-  // OPEN: 60s price refresher
+  // OPEN: 60s price refresher (batched)
   useEffect(() => {
     if (rows.length === 0) return;
     const tickers = rows.map((r) => r.ticker);
     const id = setInterval(async () => {
-      const updates = await Promise.all(tickers.map((t) => fetchPrice(t)));
-      setRows((prev) => prev.map((row, i) => ({ ...row, current: updates[i] ?? row.current })));
+      const batchSize = 8;
+      for (let i = 0; i < tickers.length; i += batchSize) {
+        const batch = tickers.slice(i, i + batchSize);
+        const updates = await Promise.all(batch.map((t) => fetchPrice(t)));
+        setRows((prev) => prev.map((row) => {
+          const idx = batch.indexOf(row.ticker);
+          return idx >= 0 ? { ...row, current: updates[idx] ?? row.current } : row;
+        }));
+        await sleep(0);
+      }
     }, 60000);
     return () => clearInterval(id);
-  }, [rows, rows.length]);
+  }, [rows]);
 
   // ========== CLOSED: load + normalize (mount + 60s)
   const loadClosed = useCallback(async (alive: boolean, tickerFilter: string) => {
@@ -211,7 +237,7 @@ export default function CallsPage() {
         const exit = toNum(c.exit ?? c.close ?? c.closed_price ?? c.exit_price);
         const target = toNum(c.t1 ?? c.target ?? c.target_price);
         const stop = toNum(c.stop ?? c.stop_loss);
-        const current_price = await fetchPrice(c.ticker);
+        const current_price = null;
         const result_pct =
           c.result_pct != null
             ? toNum(c.result_pct)
@@ -237,6 +263,26 @@ export default function CallsPage() {
       }));
       normalizedRows.sort((a, b) => (b.closed_at ?? '').localeCompare(a.closed_at ?? ''));
       if (alive) setClosedRows(normalizedRows);
+      // fetch prices in background batches
+      if (alive) {
+        let canceled = false;
+        (async () => {
+          const tickers = normalizedRows.map((r) => r.ticker);
+          const batchSize = 6;
+          for (let i = 0; i < tickers.length; i += batchSize) {
+            if (!alive || canceled) break;
+            const batch = tickers.slice(i, i + batchSize);
+            const prices = await Promise.all(batch.map((t) => fetchPrice(t)));
+            if (!alive || canceled) break;
+            setClosedRows((prev) => prev.map((row) => {
+              const idx = batch.indexOf(row.ticker);
+              return idx >= 0 ? { ...row, current_price: prices[idx] ?? row.current_price } : row;
+            }));
+            await sleep(0);
+          }
+        })();
+        // no separate cleanup needed; alive is captured from outer scope
+      }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Failed to load closed calls";
       if (alive) setClosedErr(message);
@@ -300,24 +346,25 @@ export default function CallsPage() {
               setSearchTicker(query.trim().toUpperCase());
             }}
           >
-            <input
+            <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by ticker (e.g., AAPL)"
-              className="px-2 py-1 text-sm border rounded w-48"
+              className="w-48"
               inputMode="text"
               autoCorrect="off"
               autoCapitalize="characters"
             />
-            <button type="submit" className="px-2 py-1 text-sm border rounded bg-white hover:bg-gray-50">Search</button>
+            <Button type="submit" variant="outline" size="sm">Search</Button>
             {searchTicker && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => { setQuery(""); setSearchTicker(""); }}
-                className="px-2 py-1 text-sm border rounded bg-white hover:bg-gray-50"
               >
                 Clear
-              </button>
+              </Button>
             )}
           </form>
         </div>
