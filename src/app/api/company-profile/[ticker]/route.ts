@@ -12,7 +12,7 @@ async function yahooSearchName(symbol: string): Promise<string | null> {
   return n && typeof n === "string" ? n.trim() : null;
 }
 
-async function yahooQuoteName(symbol: string): Promise<string | null> {
+async function yahooQuote(symbol: string): Promise<any | null> {
   for (const host of ["query1", "query2"]) {
     const r = await fetch(
       `https://${host}.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`,
@@ -21,8 +21,7 @@ async function yahooQuoteName(symbol: string): Promise<string | null> {
     if (!r || !r.ok) continue;
     const j = await r.json();
     const q = j?.quoteResponse?.result?.[0];
-    const n = q?.longName ?? q?.shortName ?? q?.displayName ?? null;
-    if (n && typeof n === "string" && n.trim()) return n.trim();
+    if (q) return q;
   }
   return null;
 }
@@ -49,13 +48,17 @@ export async function GET(
     const symbol = (ticker || "").toUpperCase().trim();
     if (!symbol) return NextResponse.json({ error: "ticker required" }, { status: 400 });
 
-    const name =
-      (await yahooSearchName(symbol)) ??
-      (await yahooQuoteName(symbol)) ??
-      (await finnhubName(symbol)) ??
-      null;
-
-    return NextResponse.json({ name }, { status: 200 });
+    const q = await yahooQuote(symbol);
+    const name = q?.longName ?? q?.shortName ?? (await yahooSearchName(symbol)) ?? (await finnhubName(symbol)) ?? null;
+    return NextResponse.json({
+      name,
+      exchange: q?.fullExchangeName ?? null,
+      currency: q?.currency ?? null,
+      sector: q?.sector ?? null,
+      industry: q?.industry ?? null,
+      website: q?.website ?? null,
+      marketCap: q?.marketCap ?? null,
+    }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "failed" }, { status: 500 });
   }

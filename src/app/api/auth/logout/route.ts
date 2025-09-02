@@ -6,12 +6,11 @@ import { deleteSession } from "@/lib/auth";
 export const runtime = "nodejs";
 
 export async function POST() {
-  const sessionId = getSessionId();
-
-  if (sessionId) {
-    await deleteSession(sessionId);
-    clearSessionCookie();
+  const sid = await getSessionId();
+  const res = new NextResponse(null, { status: 204 });
+  if (sid) {
+    await deleteSession(sid);
   }
-
-  return new NextResponse(null, { status: 204 });
+  clearSessionCookie(res);
+  return res;
 }

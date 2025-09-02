@@ -27,14 +27,32 @@ async function getStock(
     return NextResponse.json({ error: "Stock not found" }, { status: 404 });
   }
 
-  const [callRows] = await pool.execute(
-    `SELECT *
-       FROM stock_calls
-      WHERE stock_id = ? AND status = 'open'
-      ORDER BY opened_at DESC
-      LIMIT 1`,
-    [stockId]
-  );
+  let callRows: any[] = [];
+  if (req.user.role === 'viewer') {
+    const [rows]: any = await pool.execute(
+      `SELECT c.*
+         FROM stock_calls c
+        WHERE c.stock_id = ?
+          AND c.status = 'open'
+          AND c.opened_by_user_id IN (
+            SELECT f.following_id FROM follows f WHERE f.follower_id = ?
+          )
+        ORDER BY c.opened_at DESC
+        LIMIT 1`,
+      [stockId, req.user.id]
+    );
+    callRows = rows as any[];
+  } else {
+    const [rows]: any = await pool.execute(
+      `SELECT *
+         FROM stock_calls
+        WHERE stock_id = ? AND status = 'open'
+        ORDER BY opened_at DESC
+        LIMIT 1`,
+      [stockId]
+    );
+    callRows = rows as any[];
+  }
 
   // @ts-ignore
   const stock = stockRows[0];

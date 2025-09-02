@@ -24,7 +24,10 @@ export async function POST(req: Request) {
   const { email, password } = parsed.data;
 
   try {
-    const [rows] = await pool.execute("SELECT id, password_hash, role FROM users WHERE email = ?", [email]);
+    const [rows] = await pool.execute(
+      "SELECT id, password_hash, role FROM users WHERE email = ?",
+      [email]
+    );
     // @ts-ignore
     const user = rows[0];
 
@@ -39,9 +42,9 @@ export async function POST(req: Request) {
     }
 
     const sessionId = await createSession(user.id);
-    setSessionCookie(sessionId);
-
-    return NextResponse.json({ user: { id: user.id, email, role: user.role } });
+    const res = NextResponse.json({ user: { id: user.id, email, role: user.role } });
+    setSessionCookie(res, sessionId);
+    return res;
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

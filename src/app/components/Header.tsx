@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/app/AuthContext";
 import { useEffect, useRef, useState } from "react";
 
@@ -30,14 +31,16 @@ export default function Header() {
   return (
     <header className="bg-gray-800 text-white p-4 flex justify-between items-center">
       <div className="flex items-center gap-4">
-        <Link href="/" className="font-bold">
+        <Link href={user ? "/calls" : "/"} className="font-bold">
           <div className="bg-white p-1 rounded-md">
-            <img src="/logo.png" alt="Nafaa Logo" width={100} height={40} />
+            <Image src="/logo.png" alt="Nafaa Logo" width={100} height={40} />
           </div>
         </Link>
-        <Link href="/" className="font-bold">Dashboard</Link>
-        <Link href="/calls">Calls</Link>
-        <Link href="/stocks">Stocks</Link> {/* NEW */}
+        <Link href={user ? "/calls" : "/"} className="font-bold">Dashboard</Link>
+        <Link href="/calls">Open Calls</Link>
+        <Link href="/all-closed-calls">Closed Calls</Link>
+        <Link href="/stocks">Stocks</Link>
+        <Link href="/analysts">Analysts</Link>
       </div>
 
       <div className="flex items-center gap-4">

@@ -1,4 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is a [Next.js](https://nextjs.org) project.
+
+What’s been added recently
+
+- Trading dashboard upgrades
+  - TV‑like chart with candles + volume + AlphaTrend overlay
+  - Timeframes: 1m/5m/15m/1h/2h/1D and auto fit
+  - Fallback to TradingView widget when a symbol lacks data
+- Price data reliability
+  - New intraday candles API with provider fallbacks: Finnhub → Yahoo → Stooq (daily)
+  - Simple in‑memory caching layer for API responses (TTL)
+  - Basic rate limiting middleware on `/api/*`
+- UX tweaks
+  - Calls tables centered and green/red result coloring
+  - Clickable tickers to stock overview
+  - All‑Closed‑Calls shows entry/stop across legacy/new shapes
+- Starter watchlist page (client‑only) at `/watchlist`
+
+Environment variables
+
+- `FINNHUB_API_KEY` optional (intraday source; Yahoo fallback is used when absent)
+- `SESSION_COOKIE_NAME`, DB config, etc. (see `.env.example`)
+
+Key files
+
+- `src/components/TVLikeChart.tsx` – main in‑app chart (Lightweight Charts, client)
+- `src/app/api/price/candles/[ticker]/route.ts` – intraday/daily candles API
+- `src/lib/cache.ts` – small TTL cache used by price APIs
+- `src/middleware.ts` – rate limit for `/api/*`
+
+Next steps (pro plan)
+
+- Add crosshair tooltips, axis labels, and range presets to the chart
+- Move cache to Redis, add retries + circuit breaker
+- Alerts MVP (entry/stop/target hit) via queue + email
+- Plans, billing (Stripe), and server‑side feature flags
 
 ## Getting Started
 

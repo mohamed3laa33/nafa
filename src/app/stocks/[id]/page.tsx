@@ -5,8 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/AuthContext";
 import OverviewTab from "@/app/components/stock/OverviewTab";
-import DetailsTab from "@/app/components/stock/DetailsTab";
-import ReferencesTab from "@/app/components/stock/ReferencesTab";
 import CallsTab from "@/app/components/stock/CallsTab";
 import dynamic from "next/dynamic";
 
@@ -32,7 +30,7 @@ export default function StockDetailPage() {
   const [stock, setStock] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "details" | "references" | "calls">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "calls">("overview");
 
   useEffect(() => {
     if (!id) return;
@@ -102,22 +100,6 @@ export default function StockDetailPage() {
             Overview
           </button>
           <button
-            onClick={() => setActiveTab("details")}
-            className={`py-4 px-1 border-b-2 ${
-              activeTab === "details" ? "border-blue-500" : "border-transparent"
-            }`}
-          >
-            Details
-          </button>
-          <button
-            onClick={() => setActiveTab("references")}
-            className={`py-4 px-1 border-b-2 ${
-              activeTab === "references" ? "border-blue-500" : "border-transparent"
-            }`}
-          >
-            References
-          </button>
-          <button
             onClick={() => setActiveTab("calls")}
             className={`py-4 px-1 border-b-2 ${
               activeTab === "calls" ? "border-blue-500" : "border-transparent"
@@ -131,8 +113,6 @@ export default function StockDetailPage() {
       {/* Tab content */}
       <div className="mt-4">
         {activeTab === "overview" && <OverviewTab stock={stock} />}
-        {activeTab === "details" && <DetailsTab stockId={stock.id} isOwner={isOwner} />}
-        {activeTab === "references" && <ReferencesTab stockId={stock.id} isOwner={isOwner} />}
         {activeTab === "calls" && <CallsTab stockId={stock.id} isOwner={isOwner} />}
       </div>
     </div>

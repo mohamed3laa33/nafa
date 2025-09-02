@@ -15,14 +15,18 @@ export default function GlobalAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
 
-    const isAuthPage = pathname === "/login";
+    const publicRoutes = new Set(["/", "/login", "/signup"]);
+    const isPublic = publicRoutes.has(pathname);
 
-    if (!user && !isAuthPage) {
+    if (!user && !isPublic) {
       router.push("/login");
+      return;
     }
 
-    if (user && isAuthPage) {
-      router.push("/");
+    if (user) {
+      if (pathname === "/login" || pathname === "/signup" || pathname === "/") {
+        router.push("/calls");
+      }
     }
   }, [user, isLoading, pathname, router]);
 
@@ -31,10 +35,11 @@ export default function GlobalAuth({ children }: { children: ReactNode }) {
   }
 
   const isAuthPage = pathname === "/login";
+  const isPublicLanding = pathname === "/";
 
   return (
     <>
-      {!isAuthPage && <Header />}
+      {!isAuthPage && !isPublicLanding && <Header />}
       {children}
     </>
   );

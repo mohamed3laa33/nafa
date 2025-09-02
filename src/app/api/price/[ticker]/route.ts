@@ -13,6 +13,13 @@ type Out = {
   marketState: string | null;
   time: number;
   source: string;
+  prePrice?: number | null;
+  preChange?: number | null;
+  preChangePct?: number | null;
+  postPrice?: number | null;
+  postChange?: number | null;
+  postChangePct?: number | null;
+  prevClose?: number | null;
 };
 
 async function fromFinnhub(symbol: string): Promise<Out | null> {
@@ -89,6 +96,42 @@ async function fromYahoo(symbol: string): Promise<Out | null> {
       marketState: q.marketState ?? "UNKNOWN",
       time: q.regularMarketTime ? q.regularMarketTime * 1000 : Date.now(),
       source: "Yahoo",
+      prePrice: q.preMarketPrice ?? null,
+      preChange: q.preMarketChange ?? null,
+      preChangePct: q.preMarketChangePercent ?? null,
+      postPrice: q.postMarketPrice ?? null,
+      postChange: q.postMarketChange ?? null,
+      postChangePct: q.postMarketChangePercent ?? null,
+      prevClose: q.regularMarketPreviousClose ?? q.previousClose ?? null,
+    };
+  }
+  return null;
+}
+
+// Yahoo chart fallback (sometimes v7 quote has no entry for small caps)
+async function fromYahooChart(symbol: string): Promise<Out | null> {
+  const headers = { "User-Agent": "nfaa-app/1.0", Accept: "application/json" };
+  for (const host of ["query1", "query2"]) {
+    const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
+    const r = await fetch(url, { headers, cache: "no-store" }).catch(() => null as any);
+    if (!r || !r.ok) continue;
+    const j = await r.json();
+    const c0 = j?.chart?.result?.[0];
+    const ts = c0?.timestamp;
+    const q = c0?.indicators?.quote?.[0];
+    if (!Array.isArray(ts) || !q) continue;
+    const closes: number[] = (q.close || []).filter((x: any) => typeof x === 'number');
+    if (!closes.length) continue;
+    const price = closes[closes.length - 1];
+    return {
+      ticker: symbol,
+      price,
+      change: null,
+      changePct: null,
+      currency: c0?.meta?.currency ?? "USD",
+      marketState: c0?.meta?.marketState ?? "UNKNOWN",
+      time: (ts[ts.length - 1] || 0) * 1000,
+      source: "YahooChart",
     };
   }
   return null;
@@ -105,8 +148,8 @@ export async function GET(
       return NextResponse.json({ error: "Missing ticker" }, { status: 400 });
     }
 
-    // Try providers in order
-    const providers = [fromFinnhub, fromYahoo, fromStooq];
+    // Try providers in order (add Yahoo chart fallback for small/illiquid tickers)
+    const providers = [fromFinnhub, fromYahoo, fromYahooChart, fromStooq];
 
     for (const p of providers) {
       try {

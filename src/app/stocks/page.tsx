@@ -24,13 +24,41 @@ export default async function StocksPage() {
   const j = await r.json();
   const rows: Stock[] = Array.isArray(j?.data) ? j.data : [];
 
+  // Get current user to gate actions
+  let role: string | null = null;
+  try {
+    const me = await fetch(`${base}/api/auth/me`, {
+      cache: 'no-store',
+      headers: { cookie: h.get('cookie') ?? '' },
+    });
+    if (me.ok) {
+      const mj = await me.json();
+      role = mj?.user?.role ?? null;
+    }
+  } catch {}
+  const canCreate = role === 'admin' || role === 'analyst';
+
   return (
     <div className="p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Stocks</h1>
-        <Link href="/stocks/new" className="px-3 py-2 rounded bg-black text-white hover:opacity-90">
-          ➕ New Stock
-        </Link>
+        <div className="flex gap-2">
+          {canCreate && (
+            <Link href="/admin/quick-open-call" className="px-3 py-2 rounded border hover:bg-gray-50">
+              ⚡ Quick Call
+            </Link>
+          )}
+          {canCreate && (
+            <Link href="/admin/bulk-quick-calls" className="px-3 py-2 rounded border hover:bg-gray-50">
+              📥 Bulk Quick Calls
+            </Link>
+          )}
+          {canCreate && (
+            <Link href="/stocks/new" className="px-3 py-2 rounded bg-black text-white hover:opacity-90">
+              ➕ New Stock
+            </Link>
+          )}
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -41,7 +69,6 @@ export default async function StocksPage() {
             <thead className="bg-gray-100">
               <tr>
                 <th className="p-2 border">Ticker</th>
-                <th className="p-2 border">Market</th>
                 <th className="p-2 border">Name</th>
               </tr>
             </thead>
@@ -53,7 +80,6 @@ export default async function StocksPage() {
                       {s.ticker}
                     </Link>
                   </td>
-                  <td className="p-2 border">{s.market ?? "—"}</td>
                   <td className="p-2 border">{s.name ?? "—"}</td>
                 </tr>
               ))}

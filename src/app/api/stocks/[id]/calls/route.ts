@@ -14,8 +14,7 @@ async function getCalls(
   const { id } = await params; // UUID
   const stockId = id;
 
-  const [rows] = await pool.execute(
-    `SELECT
+  let sql = `SELECT
        id,
        stock_id,
        opened_by_user_id,
@@ -35,10 +34,19 @@ async function getCalls(
        result_pct,
        notes        AS note
      FROM stock_calls
-     WHERE stock_id = ?
-     ORDER BY opened_at DESC`,
-    [stockId]
-  );
+     WHERE stock_id = ?`;
+  const sqlParams: any[] = [stockId];
+
+  if (req.user.role === 'viewer') {
+    sql += ` AND opened_by_user_id IN (
+      SELECT following_id FROM follows WHERE follower_id = ?
+    )`;
+    sqlParams.push(req.user.id);
+  }
+
+  sql += ` ORDER BY opened_at DESC`;
+
+  const [rows] = await pool.execute(sql, sqlParams);
 
   // @ts-ignore
   return NextResponse.json({ data: rows || [] });
