@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 
-async function getData(id: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/analysts/${id}`, { cache: 'no-store' });
+async function getData(id: string, baseUrl: string) {
+  const res = await fetch(`${baseUrl}/api/analysts/${id}`, { cache: 'no-store' });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || 'Failed to load');
   return data;
@@ -9,7 +10,11 @@ async function getData(id: string) {
 
 export default async function AnalystPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { analyst, stats, portfolio, recent_closed } = await getData(id);
+  const h = headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host');
+  const proto = h.get('x-forwarded-proto') ?? 'http';
+  const base = `${proto}://${host}`;
+  const { analyst, stats, portfolio, recent_closed } = await getData(id, base);
 
   const pct = (n: number | null | undefined) => (n == null ? '—' : `${(n * 100).toFixed(1)}%`);
   const fnum = (n: number | null | undefined, d = 2) => (n == null ? '—' : Number(n).toFixed(d));
@@ -109,4 +114,3 @@ export default async function AnalystPage({ params }: { params: Promise<{ id: st
     </div>
   );
 }
-
