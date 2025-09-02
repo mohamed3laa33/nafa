@@ -19,7 +19,7 @@ async function getCalls(req: AuthenticatedRequest) {
   const to = searchParams.get("to");
 
   let query =
-    "SELECT c.*, s.ticker, u.id AS opened_by_id, COALESCE(u.name, u.email) AS opened_by FROM stock_calls c JOIN stocks s ON c.stock_id = s.id LEFT JOIN users u ON u.id = c.opened_by_user_id";
+    "SELECT c.*, s.ticker, u.id AS opened_by_id, u.email AS opened_by FROM stock_calls c JOIN stocks s ON c.stock_id = s.id LEFT JOIN users u ON u.id = c.opened_by_user_id";
   const whereClauses: string[] = [];
   const params: (string | number | (string | number)[])[] = [];
 

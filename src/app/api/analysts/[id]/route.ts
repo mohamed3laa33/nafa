@@ -8,7 +8,7 @@ async function handler(req: AuthenticatedRequest, { params }: { params: Promise<
   const { id } = await params;
   try {
     const [[userRow]]: any = await pool.execute(
-      "SELECT id, COALESCE(name, email) AS name, email, role FROM users WHERE id = ? LIMIT 1",
+      "SELECT id, email AS name, email, role FROM users WHERE id = ? LIMIT 1",
       [id]
     );
     const analyst = Array.isArray(userRow) ? userRow[0] : userRow;
@@ -46,4 +46,3 @@ async function handler(req: AuthenticatedRequest, { params }: { params: Promise<
 }
 
 export const GET = withAuth(handler);
-
