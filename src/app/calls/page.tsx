@@ -397,7 +397,7 @@ export default function CallsPage() {
           {err && <p className="p-2 text-red-500">{err}</p>}
           {openEmpty && <p className="p-2">No open calls.</p>}
           {!loading && !err && rows.length > 0 && (
-            <div className="overflow-x-auto rounded border">
+            <div className="overflow-x-auto rounded">
               <table className="nf-table text-sm">
                 <thead className="bg-gray-100">
                   <tr>
@@ -489,7 +489,7 @@ export default function CallsPage() {
           {closedErr && <p className="p-2 text-red-500">{closedErr}</p>}
           {closedEmpty && <p className="p-2">No closed calls.</p>}
           {!closedLoading && !closedErr && closedRows.length > 0 && (
-            <div className="overflow-x-auto rounded border">
+            <div className="overflow-x-auto rounded">
               <table className="nf-table text-sm text-center">
                 <thead className="bg-gray-100">
                   <tr>

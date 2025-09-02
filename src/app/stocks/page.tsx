@@ -64,7 +64,7 @@ export default async function StocksPage() {
       {rows.length === 0 ? (
         <p>No stocks yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded border">
+        <div className="overflow-x-auto rounded">
           <table className="nf-table text-sm">
             <thead className="bg-gray-100">
               <tr>

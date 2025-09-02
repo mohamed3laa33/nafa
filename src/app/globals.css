@@ -15,8 +15,9 @@ a:hover { text-decoration: underline; }
 
 /* Tables: white background, dark ink text and borders */
 .nf-table { width: 100%; border-collapse: collapse; background: var(--paper); color: var(--ink); border-radius: 8px; box-shadow: 0 0 0 2px var(--brand); overflow: hidden; }
-.nf-table th, .nf-table td { border: 1px solid var(--border); }
+.nf-table th, .nf-table td { border: 1px solid var(--border) !important; }
 .nf-table thead th { background: var(--paper); border-bottom: 2px solid var(--brand); }
+.nf-table tbody tr { border-bottom: 1px solid var(--border) !important; }
 
 /* Brand primitives */
 .btn-brand { background-color: var(--brand); color: #fff; border-radius: .375rem; }

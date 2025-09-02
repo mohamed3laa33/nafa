@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/app/AuthContext";
 
 type CallStatus = "open" | "closed";
 type CallType = "buy" | "sell";
@@ -28,6 +29,7 @@ interface CallsTabProps {
 }
 
 export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
+  const { user } = useAuth();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
