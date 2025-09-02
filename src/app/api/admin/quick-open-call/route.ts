@@ -11,6 +11,7 @@ const schema = z.object({
   ticker: z.string().min(1).max(10),
   entry_price: z.number().positive(),
   target_price: z.number().positive(),
+  is_public: z.boolean().optional().default(false),
 });
 
 interface StockIdRow extends RowDataPacket {
@@ -41,7 +42,7 @@ async function handler(req: AuthenticatedRequest) {
     target_price: typeof body?.target_price === 'string' ? Number(body.target_price) : body?.target_price,
   });
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { ticker, entry_price, target_price } = parsed.data;
+  const { ticker, entry_price, target_price, is_public } = parsed.data;
   const { id: userId } = req.user;
 
   try {
@@ -50,10 +51,10 @@ async function handler(req: AuthenticatedRequest) {
     const stop = Number((entry_price * 0.9).toFixed(4)); // default 10% below entry
     await pool.execute(
       `INSERT INTO stock_calls
-         (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes)
+         (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
        VALUES
-         (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL)`,
-      [callId, stockId, userId, entry_price, stop, target_price]
+         (?,  ?,        ?,                ?,     ?,   ?,  NULL, NULL,  30,            'open', NOW(),   NULL, 'buy', ?)`,
+      [callId, stockId, userId, entry_price, stop, target_price, is_public ? 1 : 0]
     );
     await pool.execute("UPDATE stocks SET status='active' WHERE id=?", [stockId]);
     return NextResponse.json({ stockId, callId });
@@ -64,4 +65,3 @@ async function handler(req: AuthenticatedRequest) {
 }
 
 export const POST = withAuth(handler, ["admin", "analyst"]);
-

@@ -68,10 +68,18 @@ const legacyOpenSchema = z.object({
 });
 
 const newOpenSchema = z.object({
-  type: z.enum(["buy", "sell"]).optional(), // accepted for compatibility, not stored
+  type: z.enum(["buy", "sell"]).optional(),
   entry_price: z.number().positive(),
   target_price: z.number().positive().nullable().optional(),
   stop_loss: z.number().positive().nullable().optional(),
+  is_public: z.boolean().optional().default(false),
+  note: z.string().optional(),
+});
+
+// Fundamental call (no entry/target required)
+const fundamentalOpenSchema = z.object({
+  type: z.enum(["buy", "sell"]),
+  is_public: z.boolean().optional().default(false),
   note: z.string().optional(),
 });
 
@@ -88,30 +96,35 @@ async function openCall(
   // Try new shape first; if invalid, try legacy
   const newParsed = newOpenSchema.safeParse(body);
   const legacyParsed = newParsed.success ? null : legacyOpenSchema.safeParse(body);
+  const fundamentalParsed = newParsed.success || legacyParsed?.success ? null : fundamentalOpenSchema.safeParse(body);
 
-  if (!newParsed.success && !legacyParsed?.success) {
+  if (!newParsed.success && !legacyParsed?.success && !fundamentalParsed?.success) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
   // Map to DB columns
-  let entry: number;
-  let stop: number;
+  let entry: number = 0;
+  let stop: number = 0;
   let t1: number | null = null;
   let t2: number | null = null;
   let t3: number | null = null;
   let horizon_days = 30;
   let notes: string | null = null;
+  let callType: "buy" | "sell" | null = null;
+  let is_public = false;
 
   if (newParsed.success) {
     entry = newParsed.data.entry_price;
     stop = newParsed.data.stop_loss ?? 0;
     t1 = newParsed.data.target_price ?? null;
     notes = newParsed.data.note ?? null;
+    callType = newParsed.data.type ?? null;
+    is_public = newParsed.data.is_public ?? false;
 
     if (!stop) {
       return NextResponse.json({ error: "stop_loss is required" }, { status: 400 });
     }
-  } else {
+  } else if (legacyParsed?.success) {
     entry = legacyParsed!.data.entry;
     stop = legacyParsed!.data.stop;
     t1 = legacyParsed!.data.t1 ?? null;
@@ -119,17 +132,22 @@ async function openCall(
     t3 = legacyParsed!.data.t3 ?? null;
     horizon_days = legacyParsed!.data.horizon_days ?? 30;
     notes = legacyParsed!.data.note ?? null;
+  } else if (fundamentalParsed?.success) {
+    // Fundamental: no entry/stop required
+    callType = fundamentalParsed.data.type;
+    is_public = fundamentalParsed.data.is_public ?? false;
+    notes = fundamentalParsed.data.note ?? null;
+    // leave entry=0, stop=0, t1=null
   }
 
   const callId = uuidv4();
 
   await pool.execute(
     `INSERT INTO stock_calls
-       (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes)
+       (id, stock_id, opened_by_user_id, entry, stop, t1, t2, t3, horizon_days, status, opened_at, notes, type, is_public)
      VALUES
-       (?,  ?,        ?,                ?,     ?,   ?,  ?,  ?,  ?,             'open', NOW(),   ?)`,
-    [callId, stockId, userId, entry, stop, t1, t2, t3, horizon_days, notes]
-
+       (?,  ?,        ?,                ?,     ?,   ?,  ?,  ?,  ?,             'open', NOW(),   ?,    ?,    ?)`,
+    [callId, stockId, userId, entry, stop, t1, t2, t3, horizon_days, notes, callType, is_public]
   );
   await pool.execute(
   "UPDATE stocks SET status = 'active' WHERE id = ?",

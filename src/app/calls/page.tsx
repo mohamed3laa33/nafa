@@ -17,6 +17,7 @@ type OpenCall = {
   t1?: number | string | null;        // target
   opened_at?: string | null;          // entry date
   opened_by?: string | null;          // analyst email/name
+  opened_by_id?: string | null;
 };
 
 type ClosedCall = {
@@ -41,6 +42,7 @@ type ClosedCall = {
   note?: string | null;
   result_pct?: number | string | null;
   opened_by?: string | null;
+  opened_by_id?: string | null;
 }
 
 type ClosedCallNorm = {
@@ -58,6 +60,7 @@ type ClosedCallNorm = {
   result_pct: number | null;
   current_price: number | null;
   opened_by: string | null;
+  opened_by_id?: string | null;
 };
 
 type OpenRow = {
@@ -68,6 +71,7 @@ type OpenRow = {
   current: number | null;
   openedAt: string | null;
   openedBy: string | null;
+  openedById: string | null;
 };
 
 const toNum = (v: unknown): number | null => {
@@ -161,6 +165,7 @@ export default function CallsPage() {
               current: px,
               openedAt: call.opened_at ?? null,
               openedBy: call.opened_by ?? null,
+              openedById: call.opened_by_id ?? null,
             } as OpenRow;
           })
         );
@@ -365,7 +370,7 @@ export default function CallsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ id, ticker, entry, target, current, openedAt, openedBy }) => {
+                  {rows.map(({ id, ticker, entry, target, current, openedAt, openedBy, openedById }) => {
                     const targetPct =
                       entry != null && entry > 0 && target != null ? ((target - entry) / entry) * 100 : null;
                     const remainingPct =
@@ -392,7 +397,13 @@ export default function CallsPage() {
                     return (
                       <tr key={id} className="hover:bg-gray-50">
                         <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="underline">{ticker}</Link></td>
-                        <td className="p-2 border whitespace-nowrap">{openedBy ?? '-'}</td>
+                        <td className="p-2 border whitespace-nowrap">
+                          {openedById ? (
+                            <Link href={`/analysts/${openedById}`} className="underline">{openedBy ?? openedById}</Link>
+                          ) : (
+                            openedBy ?? '-'
+                          )}
+                        </td>
                         <td className="p-2 border">{fmt(entry)}</td>
                         <td className="p-2 border">{fmt(target)}</td>
                         <td className="p-2 border">{fmt(targetPct)}</td>
@@ -455,7 +466,13 @@ export default function CallsPage() {
                       <td className="p-2 border font-medium">
                         <Link href={c.stock_id ? `/stocks/${c.stock_id}` : '#'} className="underline">{c.ticker}</Link>
                       </td>
-                      <td className="p-2 border whitespace-nowrap">{c.opened_by ?? '-'}</td>
+                      <td className="p-2 border whitespace-nowrap">
+                        {c.opened_by_id ? (
+                          <Link href={`/analysts/${c.opened_by_id}`} className="underline">{c.opened_by ?? c.opened_by_id}</Link>
+                        ) : (
+                          c.opened_by ?? '-'
+                        )}
+                      </td>
                       <td className="p-2 border">{fnum(c.entry_price)}</td>
                       <td className="p-2 border">{fnum(c.target_price)}</td>
                       <td className="p-2 border">{fnum(c.stop_loss)}</td>

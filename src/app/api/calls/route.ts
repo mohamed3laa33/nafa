@@ -19,7 +19,7 @@ async function getCalls(req: AuthenticatedRequest) {
   const to = searchParams.get("to");
 
   let query =
-    "SELECT c.*, s.ticker, u.email AS opened_by FROM stock_calls c JOIN stocks s ON c.stock_id = s.id LEFT JOIN users u ON u.id = c.opened_by_user_id";
+    "SELECT c.*, s.ticker, u.id AS opened_by_id, COALESCE(u.name, u.email) AS opened_by FROM stock_calls c JOIN stocks s ON c.stock_id = s.id LEFT JOIN users u ON u.id = c.opened_by_user_id";
   const whereClauses: string[] = [];
   const params: (string | number | (string | number)[])[] = [];
 
@@ -32,14 +32,13 @@ async function getCalls(req: AuthenticatedRequest) {
       [req.user.id]
     );
     const followingIds = rows.map((row) => String(row.following_id));
+    const placeholders = followingIds.map(() => "?").join(",");
     if (followingIds.length > 0) {
-      const placeholders = followingIds.map(() => "?").join(",");
-      whereClauses.push(`c.opened_by_user_id IN (${placeholders})`);
-      // expand array into params for mysql2 execute
+      whereClauses.push(`(c.opened_by_user_id IN (${placeholders}) OR c.is_public = 1)`);
       (params as any[]).push(...followingIds);
     } else {
-      // Return no calls if the user is not following anyone
-      return NextResponse.json([]);
+      // If not following anyone, show public calls only
+      whereClauses.push("c.is_public = 1");
     }
   }
 
