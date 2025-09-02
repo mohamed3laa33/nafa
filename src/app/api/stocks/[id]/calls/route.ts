@@ -18,6 +18,7 @@ async function getCalls(
        id,
        stock_id,
        opened_by_user_id,
+       type,
        entry        AS entry_price,
        stop         AS stop_loss,
        t1           AS target_price,
@@ -32,7 +33,8 @@ async function getCalls(
        closed_at,
        close_price,
        result_pct,
-       notes        AS note
+       notes        AS note,
+       is_public
      FROM stock_calls
      WHERE stock_id = ?`;
   const sqlParams: any[] = [stockId];

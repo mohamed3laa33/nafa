@@ -18,6 +18,7 @@ interface Call {
   result_pct?: number | null;
   opened_at: string;
   closed_at?: string | null;
+  is_public?: 0 | 1 | boolean;
 }
 
 interface CallsTabProps {
@@ -272,6 +273,17 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
                 <td className="py-2 pr-4">{c.note ?? "-"}</td>
                 {isOwner && (
                   <td className="py-2 pr-4 space-x-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await fetch(`/api/calls/${c.id}/public`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_public: !(c.is_public ? true : false) }) });
+                          await fetchCalls();
+                        } catch {}
+                      }}
+                      className="text-purple-700"
+                    >
+                      {c.is_public ? 'Make Private' : 'Make Public'}
+                    </button>
                     <button
                       onClick={() => handleCloseCall(c.id, "target_hit", 1)}
                       className="text-green-600"

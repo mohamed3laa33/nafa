@@ -10,6 +10,7 @@ export default function QuickOpenCallPage() {
   const [ticker, setTicker] = useState("");
   const [entry, setEntry] = useState("");
   const [target, setTarget] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
@@ -29,6 +30,7 @@ export default function QuickOpenCallPage() {
           ticker: ticker.trim().toUpperCase(),
           entry_price: Number(entry),
           target_price: Number(target),
+          is_public: isPublic,
         }),
       });
       const j = await r.json().catch(()=>({}));
@@ -60,6 +62,10 @@ export default function QuickOpenCallPage() {
           <label className="text-xs block mb-1">Target</label>
           <input value={target} onChange={(e)=>setTarget(e.target.value)} className="w-full border rounded px-2 py-1" type="number" step="0.0001" required />
         </div>
+        <label className="inline-flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={isPublic} onChange={(e)=>setIsPublic(e.target.checked)} />
+          Public
+        </label>
         <button disabled={loading} className="w-full bg-black text-white rounded py-2 disabled:opacity-60">{loading?'Submitting…':'Open Call'}</button>
       </form>
     </div>
