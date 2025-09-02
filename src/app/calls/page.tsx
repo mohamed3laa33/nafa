@@ -113,6 +113,9 @@ export default function CallsPage() {
   const [rows, setRows] = useState<OpenRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  // SEARCH
+  const [query, setQuery] = useState("");
+  const [searchTicker, setSearchTicker] = useState<string>("");
 
   // CLOSED
   const [closedRows, setClosedRows] = useState<ClosedCallNorm[]>([]);
@@ -125,7 +128,8 @@ export default function CallsPage() {
       setLoading(true);
       setErr("");
       try {
-        const rs = await fetch(`/api/calls?status=open`, { cache: "no-store" });
+        const url = `/api/calls?status=open${searchTicker ? `&ticker=${encodeURIComponent(searchTicker)}` : ""}`;
+        const rs = await fetch(url, { cache: "no-store" });
         const js = await rs.json();
         if (!rs.ok) throw new Error(js.error || "Failed to load stocks");
         const calls: OpenCall[] = Array.isArray(js) ? js : [];
@@ -158,7 +162,7 @@ export default function CallsPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [searchTicker]);
 
   // OPEN: 60s price refresher
   useEffect(() => {
@@ -172,11 +176,12 @@ export default function CallsPage() {
   }, [rows, rows.length]);
 
   // ========== CLOSED: load + normalize (mount + 60s)
-  const loadClosed = useCallback(async (alive: boolean) => {
+  const loadClosed = useCallback(async (alive: boolean, tickerFilter: string) => {
     setClosedLoading(true);
     setClosedErr('');
     try {
-      const rs = await fetch(`/api/calls?status=closed`, { cache: 'no-store' });
+      const url = `/api/calls?status=closed${tickerFilter ? `&ticker=${encodeURIComponent(tickerFilter)}` : ''}`;
+      const rs = await fetch(url, { cache: 'no-store' });
       const js = await rs.json();
       if (!rs.ok) throw new Error('Failed to load closed calls');
       const calls: ClosedCall[] = Array.isArray(js) ? js : [];
@@ -220,10 +225,10 @@ export default function CallsPage() {
 
   useEffect(() => {
     let alive = true;
-    loadClosed(alive);
-    const id = setInterval(() => loadClosed(alive), 60000);
+    loadClosed(alive, searchTicker);
+    const id = setInterval(() => loadClosed(alive, searchTicker), 60000);
     return () => { alive = false; clearInterval(id); };
-  }, [loadClosed]);
+  }, [loadClosed, searchTicker]);
 
   // CLOSED: 60s price refresher
   useEffect(() => {
@@ -266,6 +271,33 @@ export default function CallsPage() {
               Hits
             </button>
           </div>
+          <form
+            className="ml-2 flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchTicker(query.trim().toUpperCase());
+            }}
+          >
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by ticker (e.g., AAPL)"
+              className="px-2 py-1 text-sm border rounded w-48"
+              inputMode="text"
+              autoCorrect="off"
+              autoCapitalize="characters"
+            />
+            <button type="submit" className="px-2 py-1 text-sm border rounded bg-white hover:bg-gray-50">Search</button>
+            {searchTicker && (
+              <button
+                type="button"
+                onClick={() => { setQuery(""); setSearchTicker(""); }}
+                className="px-2 py-1 text-sm border rounded bg-white hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            )}
+          </form>
         </div>
         <div className="flex gap-2">
           <Link href="/stocks" className="px-3 py-2 rounded border hover:bg-gray-50">
