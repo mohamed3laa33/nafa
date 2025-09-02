@@ -44,7 +44,7 @@ export default function LatestOpenCall({ call }: { call: Call | null }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-[640px] w-full border rounded">
+      <table className="nf-table min-w-[640px]">
         <thead className="bg-gray-50 text-left text-sm">
           <tr>
             <th className="p-2">Status</th>

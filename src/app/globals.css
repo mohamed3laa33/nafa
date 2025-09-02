@@ -6,3 +6,13 @@ body { @apply bg-gray-50 text-slate-900 antialiased; }
 
 /* sensible defaults for plain links */
 a { @apply text-blue-600 hover:underline; }
+
+/* Brand theming */
+.header-brand { background-color: #632BA8; color: #ffffff; }
+.header-brand a { color: #ffffff; }
+.header-brand a:hover { text-decoration: underline; }
+
+/* Tables: white background, dark ink text and borders */
+.nf-table { width: 100%; border-collapse: collapse; background: #ffffff; color: #212529; }
+.nf-table th, .nf-table td { border: 1px solid #212529; }
+.nf-table thead th { background: #ffffff; }

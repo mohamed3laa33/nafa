@@ -58,7 +58,7 @@ export default async function AnalystPage({ params }: { params: Promise<{ id: st
         <h2 className="text-xl font-semibold mb-2">Portfolio</h2>
         {Array.isArray(portfolio) && portfolio.length > 0 ? (
           <div className="overflow-x-auto rounded border">
-            <table className="w-full border-collapse text-sm">
+            <table className="nf-table text-sm">
               <thead className="bg-gray-100">
                 <tr>
                   <th className="p-2 border">Ticker</th>
@@ -84,7 +84,7 @@ export default async function AnalystPage({ params }: { params: Promise<{ id: st
         <h2 className="text-xl font-semibold mb-2">Recent Closed Calls</h2>
         {Array.isArray(recent_closed) && recent_closed.length > 0 ? (
           <div className="overflow-x-auto rounded border">
-            <table className="w-full border-collapse text-sm">
+            <table className="nf-table text-sm">
               <thead className="bg-gray-100">
                 <tr>
                   <th className="p-2 border">Ticker</th>

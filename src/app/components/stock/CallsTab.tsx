@@ -249,7 +249,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
 
       <h3 className="text-xl font-bold mb-2">Open Calls</h3>
       <div className="overflow-x-auto mb-8">
-        <table className="min-w-full text-sm">
+        <table className="nf-table text-sm">
           <thead>
             <tr className="text-left border-b">
               <th className="py-2 pr-4">Type</th>
@@ -313,7 +313,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
 
       <h3 className="text-xl font-bold mb-2">Call History</h3>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="nf-table text-sm">
           <thead>
             <tr className="text-left border-b">
               <th className="py-2 pr-4">Type</th>

@@ -65,7 +65,7 @@ export default async function StocksPage() {
         <p>No stocks yet.</p>
       ) : (
         <div className="overflow-x-auto rounded border">
-          <table className="w-full text-sm border-collapse">
+          <table className="nf-table text-sm">
             <thead className="bg-gray-100">
               <tr>
                 <th className="p-2 border">Ticker</th>

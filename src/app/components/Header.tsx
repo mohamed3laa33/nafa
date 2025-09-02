@@ -29,7 +29,7 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="bg-gray-800 text-white p-4 flex justify-between items-center">
+    <header className="header-brand p-4 flex justify-between items-center">
       <div className="flex items-center gap-4">
         <Link href={user ? "/calls" : "/"} className="font-bold">
           <div className="bg-white p-1 rounded-md">

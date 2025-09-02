@@ -93,7 +93,7 @@ export default function ClosedCallsPage() {
         <p>No closed calls.</p>
       ) : (
         <div className="overflow-x-auto rounded border">
-          <table className="w-full border-collapse text-sm">
+          <table className="nf-table text-sm">
             <thead className="bg-gray-100">
               <tr>
                 <th className="p-2 border">Status</th>

@@ -398,7 +398,7 @@ export default function CallsPage() {
           {openEmpty && <p className="p-2">No open calls.</p>}
           {!loading && !err && rows.length > 0 && (
             <div className="overflow-x-auto rounded border">
-              <table className="w-full border-collapse text-sm">
+              <table className="nf-table text-sm">
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="p-2 border">Stock Ticker</th>
@@ -490,7 +490,7 @@ export default function CallsPage() {
           {closedEmpty && <p className="p-2">No closed calls.</p>}
           {!closedLoading && !closedErr && closedRows.length > 0 && (
             <div className="overflow-x-auto rounded border">
-              <table className="w-full border-collapse text-sm text-center">
+              <table className="nf-table text-sm text-center">
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="p-2 border">Stock Ticker</th>
