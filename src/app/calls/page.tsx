@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/app/AuthContext";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const PriceSparkline = dynamic(() => import("@/components/PriceSparkline"), { ssr: false });
 
@@ -300,24 +302,25 @@ export default function CallsPage() {
               setSearchTicker(query.trim().toUpperCase());
             }}
           >
-            <input
+            <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by ticker (e.g., AAPL)"
-              className="px-2 py-1 text-sm border rounded w-48"
+              className="w-48"
               inputMode="text"
               autoCorrect="off"
               autoCapitalize="characters"
             />
-            <button type="submit" className="px-2 py-1 text-sm border rounded bg-white hover:bg-gray-50">Search</button>
+            <Button type="submit" variant="outline" size="sm">Search</Button>
             {searchTicker && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => { setQuery(""); setSearchTicker(""); }}
-                className="px-2 py-1 text-sm border rounded bg-white hover:bg-gray-50"
               >
                 Clear
-              </button>
+              </Button>
             )}
           </form>
         </div>

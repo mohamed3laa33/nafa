@@ -38,10 +38,14 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} ${geistSans.className} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${geistSans.className} antialiased min-h-screen bg-gray-50 text-slate-900`}
       >
         <AuthProvider>
-          <GlobalAuth>{children}</GlobalAuth>
+          <GlobalAuth>
+            <div className="max-w-7xl mx-auto px-4 py-4">
+              {children}
+            </div>
+          </GlobalAuth>
         </AuthProvider>
       </body>
     </html>
