@@ -11,9 +11,12 @@ const PriceSparkline = dynamic(() => import("@/components/PriceSparkline"), { ss
 type Stock = { id: string; ticker: string };
 
 type OpenCall = {
+  stock_id?: string | null;
+  ticker?: string | null;
   entry?: number | string | null;
   t1?: number | string | null;        // target
   opened_at?: string | null;          // entry date
+  opened_by?: string | null;          // analyst email/name
 };
 
 type ClosedCall = {
@@ -37,6 +40,7 @@ type ClosedCall = {
   outcome?: string | null;
   note?: string | null;
   result_pct?: number | string | null;
+  opened_by?: string | null;
 }
 
 type ClosedCallNorm = {
@@ -53,6 +57,7 @@ type ClosedCallNorm = {
   note: string | null;
   result_pct: number | null;
   current_price: number | null;
+  opened_by: string | null;
 };
 
 type OpenRow = {
@@ -62,6 +67,7 @@ type OpenRow = {
   target: number | null;
   current: number | null;
   openedAt: string | null;
+  openedBy: string | null;
 };
 
 const toNum = (v: unknown): number | null => {
@@ -154,6 +160,7 @@ export default function CallsPage() {
               target: toNum(call.t1),
               current: px,
               openedAt: call.opened_at ?? null,
+              openedBy: call.opened_by ?? null,
             } as OpenRow;
           })
         );
@@ -220,6 +227,7 @@ export default function CallsPage() {
           note: c.note ?? null,
           result_pct,
           current_price: current_price,
+          opened_by: c.opened_by ?? null,
         };
       }));
       normalizedRows.sort((a, b) => (b.closed_at ?? '').localeCompare(a.closed_at ?? ''));
@@ -342,6 +350,7 @@ export default function CallsPage() {
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="p-2 border">Stock Ticker</th>
+                    <th className="p-2 border">Analyst</th>
                     <th className="p-2 border">Entry</th>
                     <th className="p-2 border">Target</th>
                     <th className="p-2 border">Target % (vs Entry)</th>
@@ -356,7 +365,7 @@ export default function CallsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ id, ticker, entry, target, current, openedAt }) => {
+                  {rows.map(({ id, ticker, entry, target, current, openedAt, openedBy }) => {
                     const targetPct =
                       entry != null && entry > 0 && target != null ? ((target - entry) / entry) * 100 : null;
                     const remainingPct =
@@ -383,6 +392,7 @@ export default function CallsPage() {
                     return (
                       <tr key={id} className="hover:bg-gray-50">
                         <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="underline">{ticker}</Link></td>
+                        <td className="p-2 border whitespace-nowrap">{openedBy ?? '-'}</td>
                         <td className="p-2 border">{fmt(entry)}</td>
                         <td className="p-2 border">{fmt(target)}</td>
                         <td className="p-2 border">{fmt(targetPct)}</td>
@@ -426,6 +436,7 @@ export default function CallsPage() {
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="p-2 border">Stock Ticker</th>
+                    <th className="p-2 border">Analyst</th>
                     <th className="p-2 border">Entry</th>
                     <th className="p-2 border">Target</th>
                     <th className="p-2 border">Stop Loss</th>
@@ -444,6 +455,7 @@ export default function CallsPage() {
                       <td className="p-2 border font-medium">
                         <Link href={c.stock_id ? `/stocks/${c.stock_id}` : '#'} className="underline">{c.ticker}</Link>
                       </td>
+                      <td className="p-2 border whitespace-nowrap">{c.opened_by ?? '-'}</td>
                       <td className="p-2 border">{fnum(c.entry_price)}</td>
                       <td className="p-2 border">{fnum(c.target_price)}</td>
                       <td className="p-2 border">{fnum(c.stop_loss)}</td>
