@@ -7,11 +7,18 @@ import { hashPassword } from "@/lib/auth";
 
 export async function GET() {
   try {
-    // Prefer username when available; fallback to email
-    const [rows] = await pool.execute(
-      "SELECT id, email, COALESCE(username, email) AS name FROM users WHERE role = 'analyst'"
-    );
-    return NextResponse.json(rows);
+    try {
+      const [rows] = await pool.execute(
+        "SELECT id, email, COALESCE(username, email) AS name FROM users WHERE role = 'analyst'"
+      );
+      return NextResponse.json(rows);
+    } catch {
+      // Fallback when username column does not exist yet
+      const [rows] = await pool.execute(
+        "SELECT id, email, email AS name FROM users WHERE role = 'analyst'"
+      );
+      return NextResponse.json(rows);
+    }
   } catch (error) {
     console.error("Failed to fetch analysts:", error);
     return NextResponse.json(
@@ -55,15 +62,15 @@ async function createAnalyst(req: AuthenticatedRequest) {
     const passwordHash = await hashPassword(password);
     let result: any;
     try {
-      // Try inserting with username column
+      // Try inserting with username column; explicitly pass id=NULL for strict modes
       [result] = await pool.execute(
-        "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, 'analyst')",
+        "INSERT INTO users (id, username, email, password_hash, role) VALUES (NULL, ?, ?, ?, 'analyst')",
         [username, email, passwordHash]
       );
     } catch (e: any) {
-      // Fallback if username column does not exist yet
+      // Fallback if username column does not exist yet; keep id=NULL for strict modes
       [result] = await pool.execute(
-        "INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'analyst')",
+        "INSERT INTO users (id, email, password_hash, role) VALUES (NULL, ?, ?, 'analyst')",
         [email, passwordHash]
       );
     }

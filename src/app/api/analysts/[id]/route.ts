@@ -7,11 +7,21 @@ export const runtime = "nodejs";
 async function handler(req: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const [[userRow]]: any = await pool.execute(
-      "SELECT id, COALESCE(username, email) AS name, email, role FROM users WHERE id = ? LIMIT 1",
-      [id]
-    );
-    const analyst = Array.isArray(userRow) ? userRow[0] : userRow;
+    let userRowData: any;
+    try {
+      const [[row]]: any = await pool.execute(
+        "SELECT id, COALESCE(username, email) AS name, email, role FROM users WHERE id = ? LIMIT 1",
+        [id]
+      );
+      userRowData = row;
+    } catch {
+      const [[row]]: any = await pool.execute(
+        "SELECT id, email AS name, email, role FROM users WHERE id = ? LIMIT 1",
+        [id]
+      );
+      userRowData = row;
+    }
+    const analyst = Array.isArray(userRowData) ? userRowData[0] : userRowData;
     if (!analyst) return NextResponse.json({ error: "Analyst not found" }, { status: 404 });
 
     const [[stats]]: any = await pool.execute(
