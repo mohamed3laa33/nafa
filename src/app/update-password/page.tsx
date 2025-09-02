@@ -47,7 +47,7 @@ export default function UpdatePasswordPage() {
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
+          className="btn-brand py-2 px-4 rounded hover:opacity-95"
         >
           Update
         </button>

@@ -93,7 +93,7 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-black text-white py-2 rounded disabled:opacity-60"
+          className="w-full btn-brand py-2 rounded disabled:opacity-60"
         >
           {loading ? "Signing up…" : `Sign up (${role})`}
         </button>

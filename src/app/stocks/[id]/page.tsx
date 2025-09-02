@@ -81,7 +81,7 @@ export default function StockDetailPage() {
           {/* Action: view closed calls */}
           <Link
             href={`/stocks/${id}/closed-calls`}
-            className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
+            className="px-3 py-2 rounded border text-sm hover:bg-gray-50 brand-link"
           >
             View Closed Calls
           </Link>
@@ -93,17 +93,13 @@ export default function StockDetailPage() {
         <nav className="-mb-px flex gap-6">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`py-4 px-1 border-b-2 ${
-              activeTab === "overview" ? "border-blue-500" : "border-transparent"
-            }`}
+            className={`py-4 px-1 border-b-2 ${activeTab === "overview" ? "border-[var(--brand)]" : "border-transparent"}`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab("calls")}
-            className={`py-4 px-1 border-b-2 ${
-              activeTab === "calls" ? "border-blue-500" : "border-transparent"
-            }`}
+            className={`py-4 px-1 border-b-2 ${activeTab === "calls" ? "border-[var(--brand)]" : "border-transparent"}`}
           >
             Calls
           </button>

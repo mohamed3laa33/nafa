@@ -9,7 +9,6 @@ export function TabsList({ children }: { children: React.ReactNode }) {
 }
 export function TabsTrigger({ active, onClick, children }: { active?: boolean; onClick?: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={cn('px-3 py-1 text-sm', active ? 'bg-black text-white' : 'bg-white')}>{children}</button>
+    <button onClick={onClick} className={cn('px-3 py-1 text-sm', active ? 'tab-active' : 'bg-white')}>{children}</button>
   )
 }
-

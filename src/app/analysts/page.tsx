@@ -81,7 +81,7 @@ const AnalystsPage: FC = () => {
         <h1 className="text-3xl font-bold mb-6">Analysts</h1>
         {user?.role === 'admin' && (
           <form
-            className="mb-6 p-4 border rounded bg-white max-w-xl"
+            className="mb-6 p-4 card-brand rounded max-w-xl"
             onSubmit={async (e) => {
               e.preventDefault();
               setSaving(true);
@@ -116,7 +116,7 @@ const AnalystsPage: FC = () => {
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full p-2 border rounded"
+                  className="w-full input-brand"
                   required
                 />
               </div>
@@ -126,7 +126,7 @@ const AnalystsPage: FC = () => {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full p-2 border rounded"
+                  className="w-full input-brand"
                   minLength={8}
                   required
                 />
@@ -135,7 +135,7 @@ const AnalystsPage: FC = () => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="bg-black text-white rounded px-4 py-2 disabled:opacity-60"
+                  className="btn-brand px-4 py-2 disabled:opacity-60"
                 >
                   {saving ? 'Creating…' : 'Add Analyst'}
                 </button>
@@ -147,10 +147,7 @@ const AnalystsPage: FC = () => {
         {error && <p className="text-red-500 mb-4">{error}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.isArray(analysts) && analysts.map((analyst) => (
-            <div
-              key={analyst.id}
-              className="bg-white rounded-lg shadow-md p-6 flex justify-between items-center"
-            >
+            <div key={analyst.id} className="card-brand rounded-lg p-6 flex justify-between items-center">
               <div>
                 <span className="text-lg font-medium">{analyst.name}</span>
                 <p className="text-gray-500">{analyst.email}</p>
@@ -159,14 +156,14 @@ const AnalystsPage: FC = () => {
                 followedAnalysts.includes(String(analyst.id)) ? (
                 <button
                   onClick={() => handleUnfollow(analyst.id)}
-                  className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded"
+                  className="btn-brand opacity-80 hover:opacity-100 font-bold py-2 px-4"
                 >
                   Unfollow
                 </button>
               ) : (
                 <button
                   onClick={() => handleFollow(analyst.id)}
-                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+                  className="btn-brand font-bold py-2 px-4"
                 >
                   Follow
                 </button>

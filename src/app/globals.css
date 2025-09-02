@@ -1,11 +1,12 @@
 @import "tailwindcss";
 
-:root { color-scheme: light; }
+:root { color-scheme: light; --brand:#632BA8; --ink:#212529; --paper:#ffffff; --border:#212529; }
 html, body { height: 100%; }
-body { @apply bg-gray-50 text-slate-900 antialiased; }
+body { background: #f6f7f9; color: var(--ink); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 /* sensible defaults for plain links */
-a { @apply text-blue-600 hover:underline; }
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
 /* Brand theming */
 .header-brand { background-color: #632BA8; color: #ffffff; }
@@ -16,3 +17,11 @@ a { @apply text-blue-600 hover:underline; }
 .nf-table { width: 100%; border-collapse: collapse; background: #ffffff; color: #212529; }
 .nf-table th, .nf-table td { border: 1px solid #212529; }
 .nf-table thead th { background: #ffffff; }
+
+/* Brand primitives */
+.btn-brand { background-color: var(--brand); color: #fff; border-radius: .375rem; }
+.btn-brand:hover { filter: brightness(0.95); }
+.input-brand { border: 1px solid var(--border); color: var(--ink); border-radius: .375rem; padding: .5rem .75rem; }
+.card-brand { background: var(--paper); color: var(--ink); border: 1px solid var(--border); }
+.brand-link { color: var(--brand); }
+.tab-active { background-color: var(--brand); color: #fff; }

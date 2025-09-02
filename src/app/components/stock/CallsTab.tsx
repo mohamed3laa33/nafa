@@ -242,7 +242,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
             </div>
           </div>
 
-          <button type="submit" className="bg-blue-500 text-white py-2 px-4 rounded">
+          <button type="submit" className="btn-brand py-2 px-4 rounded">
             Open Call
           </button>
         </form>

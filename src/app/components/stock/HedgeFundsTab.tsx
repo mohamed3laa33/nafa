@@ -50,7 +50,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
         <ul className="list-disc pl-6 space-y-1">
           <li>
             <a
-              className="text-blue-600 underline"
+              className="brand-link underline"
               target="_blank"
               rel="noopener noreferrer"
               href={`https://www.sec.gov/edgar/search/#/q=13F-HR%20${encodeURIComponent(ticker)}`}
@@ -60,7 +60,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
           </li>
           <li>
             <a
-              className="text-blue-600 underline"
+              className="brand-link underline"
               target="_blank"
               rel="noopener noreferrer"
               href={`https://whalewisdom.com/stock/${encodeURIComponent(ticker.toLowerCase())}`}
@@ -70,7 +70,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
           </li>
           <li>
             <a
-              className="text-blue-600 underline"
+              className="brand-link underline"
               target="_blank"
               rel="noopener noreferrer"
               href={`https://fintel.io/so/us/${encodeURIComponent(ticker.toLowerCase())}`}
@@ -105,7 +105,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
               <td className="p-2 border">
                 {h.filingUrl ? (
                   <a
-                    className="text-blue-600 underline"
+                    className="brand-link underline"
                     target="_blank"
                     rel="noopener noreferrer"
                     href={h.filingUrl}

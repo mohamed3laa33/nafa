@@ -66,7 +66,7 @@ export default function QuickOpenCallPage() {
           <input type="checkbox" checked={isPublic} onChange={(e)=>setIsPublic(e.target.checked)} />
           Public
         </label>
-        <button disabled={loading} className="w-full bg-black text-white rounded py-2 disabled:opacity-60">{loading?'Submitting…':'Open Call'}</button>
+        <button disabled={loading} className="w-full btn-brand rounded py-2 disabled:opacity-60">{loading?'Submitting…':'Open Call'}</button>
       </form>
     </div>
   );

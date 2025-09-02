@@ -54,7 +54,7 @@ export default async function StocksPage() {
             </Link>
           )}
           {canCreate && (
-            <Link href="/stocks/new" className="px-3 py-2 rounded bg-black text-white hover:opacity-90">
+            <Link href="/stocks/new" className="px-3 py-2 rounded btn-brand hover:opacity-95">
               ➕ New Stock
             </Link>
           )}

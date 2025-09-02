@@ -98,7 +98,7 @@ async function fetchPrice(ticker: string): Promise<number | null> {
 
 const Buzz = ({ t }: { t: string }) => (
   <a
-    className="text-blue-600"
+    className="brand-link"
     target="_blank"
     rel="noopener noreferrer"
     href={`https://x.com/search?q=%24${encodeURIComponent(t)}%20lang%3Aen%20-filter%3Aretweets%20min_faves%3A10&f=live`}
@@ -108,7 +108,7 @@ const Buzz = ({ t }: { t: string }) => (
 );
 const News = ({ t }: { t: string }) => (
   <a
-    className="text-blue-600"
+    className="brand-link"
     target="_blank"
     rel="noopener noreferrer"
     href={`https://news.google.com/search?q=${encodeURIComponent(t)}&hl=en-US&gl=US&ceid=US:en`}
@@ -321,19 +321,19 @@ export default function CallsPage() {
           <h1 className="text-2xl font-bold">Calls</h1>
           <div className="inline-flex rounded border overflow-hidden">
             <button
-              className={`px-3 py-1 text-sm ${tab === "open" ? "bg-black text-white" : "bg-white"}`}
+              className={`px-3 py-1 text-sm ${tab === "open" ? "tab-active" : "bg-white"}`}
               onClick={() => setTab("open")}
             >
               Open
             </button>
             <button
-              className={`px-3 py-1 text-sm ${tab === "closed" ? "bg-black text-white" : "bg-white"}`}
+              className={`px-3 py-1 text-sm ${tab === "closed" ? "tab-active" : "bg-white"}`}
               onClick={() => setTab("closed")}
             >
               Closed
             </button>
             <button
-              className={`px-3 py-1 text-sm ${tab === "hits" ? "bg-black text-white" : "bg-white"}`}
+              className={`px-3 py-1 text-sm ${tab === "hits" ? "tab-active" : "bg-white"}`}
               onClick={() => setTab("hits")}
             >
               Hits
@@ -383,7 +383,7 @@ export default function CallsPage() {
             </Link>
           )}
           {(user?.role === 'admin' || user?.role === 'analyst') && (
-            <Link href="/stocks/new" className="px-3 py-2 rounded bg-black text-white hover:opacity-90">
+            <Link href="/stocks/new" className="px-3 py-2 rounded btn-brand hover:opacity-95">
               ➕ New Stock
             </Link>
           )}

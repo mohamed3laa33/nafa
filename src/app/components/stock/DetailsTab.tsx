@@ -156,7 +156,7 @@ export default function DetailsTab({ stockId, isOwner }: DetailsTabProps) {
         <button
           onClick={handleSave}
           disabled={!!techErr || !!fundErr}
-          className="mt-4 bg-blue-500 text-white py-2 px-4 rounded disabled:opacity-60"
+          className="mt-4 btn-brand py-2 px-4 rounded disabled:opacity-60"
         >
           Save Details
         </button>

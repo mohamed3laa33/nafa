@@ -84,7 +84,7 @@ export default function ClosedCallsPage() {
     <div className="p-4">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Closed Calls</h1>
-        <Link href={`/stocks/${stockId}`} className="text-blue-600 hover:underline">
+        <Link href={`/stocks/${stockId}`} className="brand-link hover:underline">
           ← Back to Stock
         </Link>
       </div>

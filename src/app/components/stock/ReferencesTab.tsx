@@ -116,7 +116,7 @@ export default function ReferencesTab({ stockId, isOwner }: ReferencesTabProps) 
           />
           <button
             onClick={handleAdd}
-            className="bg-blue-500 text-white py-2 px-4 rounded"
+            className="btn-brand py-2 px-4 rounded"
           >
             Add
           </button>

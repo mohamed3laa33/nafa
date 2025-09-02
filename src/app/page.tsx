@@ -21,7 +21,7 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 href="/signup"
-                className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3 rounded-md bg-black text-white hover:opacity-90"
+                className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3 rounded-md btn-brand hover:opacity-95"
               >
                 Sign up — Viewer
               </Link>

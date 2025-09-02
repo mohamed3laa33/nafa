@@ -44,7 +44,7 @@ export default function BulkQuickCallsPage() {
           <input type="checkbox" checked={isPublic} onChange={(e)=>setIsPublic(e.target.checked)} />
           Public
         </label>
-        <button disabled={loading} className="px-3 py-2 rounded bg-black text-white disabled:opacity-60">{loading?'Submitting…':'Open Calls'}</button>
+        <button disabled={loading} className="px-3 py-2 rounded btn-brand disabled:opacity-60">{loading?'Submitting…':'Open Calls'}</button>
       </form>
       {out && (
         <div className="mt-4 text-xs">

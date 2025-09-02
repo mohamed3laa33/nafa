@@ -24,7 +24,7 @@ export default function WatchlistPage() {
       <div className="flex items-center gap-2 mb-4">
         <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
           placeholder="AAPL" className="border rounded px-2 py-1" />
-        <button className="px-3 py-1 bg-black text-white rounded" onClick={() => {
+        <button className="px-3 py-1 btn-brand" onClick={() => {
           const t = ticker.trim().toUpperCase(); if (!t) return;
           if (items.some(i => i.t === t)) return;
           save([...items, { t }]); setTicker("");
@@ -45,4 +45,3 @@ export default function WatchlistPage() {
     </div>
   );
 }
-
