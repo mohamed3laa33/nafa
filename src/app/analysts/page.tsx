@@ -17,6 +17,7 @@ const AnalystsPage: FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   // Admin create form
+  const [newUsername, setNewUsername] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -90,16 +91,17 @@ const AnalystsPage: FC = () => {
                 const res = await fetch('/api/analysts', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email: newEmail.trim(), password: newPassword }),
+                  body: JSON.stringify({ username: newUsername.trim(), email: newEmail.trim(), password: newPassword }),
                 });
                 const j = await res.json().catch(() => ({}));
                 if (!res.ok) {
                   setError(j?.error || 'Failed to create analyst');
                 } else {
+                  setNewUsername("");
                   setNewEmail("");
                   setNewPassword("");
                   // refresh list
-                  setAnalysts((prev) => [{ id: String(j.id), name: j.email, email: j.email }, ...prev]);
+                  setAnalysts((prev) => [{ id: String(j.id), name: j.username || j.email, email: j.email }, ...prev]);
                 }
               } catch {
                 setError('Failed to create analyst');
@@ -109,7 +111,19 @@ const AnalystsPage: FC = () => {
             }}
           >
             <h2 className="text-lg font-semibold mb-3">Add Analyst (Admin)</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-sm mb-1">Username</label>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="w-full input-brand"
+                  minLength={3}
+                  maxLength={32}
+                  required
+                />
+              </div>
               <div>
                 <label className="block text-sm mb-1">Email</label>
                 <input
