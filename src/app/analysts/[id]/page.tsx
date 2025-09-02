@@ -68,7 +68,7 @@ export default async function AnalystPage({ params }: { params: Promise<{ id: st
               <tbody>
                 {portfolio.map((s: any) => (
                   <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="p-2 border font-medium"><Link href={`/stocks/${s.id}`} className="underline">{s.ticker}</Link></td>
+                    <td className="p-2 border font-medium"><Link href={`/stocks/${s.id}`} className="brand-link underline">{s.ticker}</Link></td>
                     <td className="p-2 border">{s.name ?? '—'}</td>
                   </tr>
                 ))}

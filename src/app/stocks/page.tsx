@@ -76,7 +76,7 @@ export default async function StocksPage() {
               {rows.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <td className="p-2 border">
-                    <Link href={`/stocks/${s.id}`} className="underline">
+                    <Link href={`/stocks/${s.id}`} className="brand-link underline">
                       {s.ticker}
                     </Link>
                   </td>

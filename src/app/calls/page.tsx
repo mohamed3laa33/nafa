@@ -443,7 +443,7 @@ export default function CallsPage() {
 
                     return (
                       <tr key={id} className="hover:bg-gray-50">
-                        <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="underline">{ticker}</Link></td>
+                        <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="brand-link underline">{ticker}</Link></td>
                         <td className="p-2 border whitespace-nowrap">
                           {openedById ? (
                             <Link href={`/analysts/${openedById}`} className="underline">{openedBy ?? openedById}</Link>
@@ -511,7 +511,7 @@ export default function CallsPage() {
                   {closedRows.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="p-2 border font-medium">
-                        <Link href={c.stock_id ? `/stocks/${c.stock_id}` : '#'} className="underline">{c.ticker}</Link>
+                        <Link href={c.stock_id ? `/stocks/${c.stock_id}` : '#'} className="brand-link underline">{c.ticker}</Link>
                       </td>
                       <td className="p-2 border whitespace-nowrap">
                         {c.opened_by_id ? (
