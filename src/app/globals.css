@@ -14,9 +14,12 @@ a:hover { text-decoration: underline; }
 .header-brand a:hover { text-decoration: underline; }
 
 /* Tables: white background, dark ink text and borders */
-.nf-table { width: 100%; border-collapse: collapse; background: var(--paper); color: var(--ink); border-radius: 8px; box-shadow: 0 0 0 2px var(--brand); overflow: hidden; }
+.nf-table-wrap { border-radius: 8px; box-shadow: 0 0 0 2px var(--brand); }
+.nf-table { width: 100%; border-collapse: collapse; background: var(--paper); color: var(--ink); }
 .nf-table th, .nf-table td { border: 1px solid var(--border) !important; }
-.nf-table thead th { background: var(--paper); border-bottom: 2px solid var(--brand); }
+/* Sticky header */
+.nf-table thead th { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 2px solid var(--brand); }
+.nf-table thead { position: relative; z-index: 2; }
 .nf-table tbody tr { border-bottom: 1px solid var(--border) !important; }
 
 /* Brand primitives */
@@ -26,3 +29,7 @@ a:hover { text-decoration: underline; }
 .card-brand { background: var(--paper); color: var(--ink); border: 1px solid var(--border); }
 .brand-link { color: var(--brand); }
 .tab-active { background-color: var(--brand); color: #fff; }
+
+/* Outline brand button */
+.btn-outline-brand { color: var(--brand); background: transparent; border: 2px solid var(--brand); border-radius: .5rem; }
+.btn-outline-brand:hover { background: rgba(99,43,168,0.06); }

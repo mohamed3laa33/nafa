@@ -7,6 +7,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 const PriceSparkline = dynamic(() => import("@/components/PriceSparkline"), { ssr: false });
 
@@ -117,6 +119,278 @@ const News = ({ t }: { t: string }) => (
   </a>
 );
 
+// Lightweight 5m momentum indicator using /api/price/flow
+function Momentum5m({ t, refreshKey, buyThreshold = 55, sellThreshold = 45 }: { t: string; refreshKey?: number; buyThreshold?: number; sellThreshold?: number }) {
+  const [state, setState] = useState<{ label: 'Buy' | 'Sell' | 'Neutral' | null; pct?: number | null; buy?: number; sell?: number; total?: number }>({ label: null });
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/price/flow/${encodeURIComponent(t)}?window=5m`, { cache: 'no-store' });
+        const j = await r.json();
+        if (!alive) return;
+        if (r.ok) {
+          const buy = Number(j?.buyVol || 0);
+          const sell = Number(j?.sellVol || 0);
+          const total = buy + sell;
+          const buyPct = total > 0 && j?.buyPct != null ? Number(j.buyPct) : (total>0 ? (buy/total)*100 : null);
+          let label: 'Buy' | 'Sell' | 'Neutral' | null = null;
+          if (buyPct == null) label = null;
+          else if (buyPct >= buyThreshold) label = 'Buy';
+          else if (buyPct <= sellThreshold) label = 'Sell';
+          else label = 'Neutral';
+          setState({ label, pct: buyPct, buy, sell, total });
+        } else {
+          setState({ label: null });
+        }
+      } catch { setState({ label: null }); }
+    })();
+    return () => { alive = false; };
+  }, [t, refreshKey, buyThreshold, sellThreshold]);
+  if (!state.label) return <span className="text-xs text-gray-500">—</span>;
+  const variant = state.label === 'Buy' ? 'success' : state.label === 'Sell' ? 'destructive' : 'muted';
+  const text = state.pct != null ? `${state.label} • ${state.pct.toFixed(0)}%` : state.label;
+  const tip = `Buy: ${state.buy ?? '-'}  Sell: ${state.sell ?? '-'}  Total: ${state.total ?? '-'}  Window: 5m`;
+  return <span title={tip}><Badge variant={variant}>{text}</Badge></span>;
+}
+
+// RVOL and VWAP helpers
+type Candle = { t: number; o: number; h: number; l: number; c: number; v: number };
+async function fetchCandles(ticker: string, res: '1' | 'D', days: number): Promise<Candle[]> {
+  try {
+    const r = await fetch(`/api/price/candles/${encodeURIComponent(ticker)}?res=${res}&days=${days}`, { cache: 'no-store' });
+    const j = await r.json();
+    return r.ok && Array.isArray(j?.candles) ? (j.candles as Candle[]) : [];
+  } catch { return []; }
+}
+
+function RVOLVWAP({ t }: { t: string }) {
+  const [state, setState] = useState<{ rvol?: number | null; vwap?: number | null; distPct?: number | null }>({});
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const d = await fetchCandles(t, 'D', 21);
+      const vols = d.map((x) => Number(x.v || 0)).filter((x) => Number.isFinite(x) && x > 0);
+      const todayVol = vols.length ? vols[vols.length - 1] : null;
+      const avgVol = vols.length > 1 ? vols.slice(-11, -1).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(10, vols.length - 1)) : null;
+      const rvol = avgVol && todayVol ? (todayVol / avgVol) : null;
+
+      const m = await fetchCandles(t, '1', 1);
+      let vwap: number | null = null;
+      if (m && m.length) {
+        let volSum = 0, pvSum = 0;
+        for (const k of m) {
+          const typical = (Number(k.h) + Number(k.l) + Number(k.c)) / 3;
+          const v = Number(k.v || 0);
+          if (!Number.isFinite(typical) || !Number.isFinite(v)) continue;
+          pvSum += typical * v;
+          volSum += v;
+        }
+        vwap = volSum > 0 ? pvSum / volSum : null;
+      }
+      let distPct: number | null = null;
+      if (vwap != null) {
+        const last = m?.[m.length - 1]?.c;
+        if (Number.isFinite(last) && vwap > 0) distPct = ((Number(last) - vwap) / vwap) * 100;
+      }
+      if (alive) setState({ rvol, vwap, distPct });
+    })();
+    return () => { alive = false; };
+  }, [t]);
+
+  const rvolTxt = state.rvol == null ? '—' : state.rvol.toFixed(2) + 'x';
+  const distTxt = state.distPct == null ? '—' : (state.distPct >= 0 ? '+' : '') + state.distPct.toFixed(2) + '%';
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <div>
+        <span className="text-gray-600">RVOL: </span>
+        <span className="font-medium">{rvolTxt}</span>
+      </div>
+      <div>
+        <span className="text-gray-600">VWAP Δ: </span>
+        <span className={`${state.distPct == null ? '' : state.distPct >= 0 ? 'text-green-600' : 'text-red-600'} font-medium`}>{distTxt}</span>
+      </div>
+    </div>
+  );
+}
+
+// -------- Fair Target cell (daily ATR + 20D high heuristic) --------
+function FairTargetCell({ t, entry, target }: { t: string; entry: number | null; target: number | null }) {
+  const [state, setState] = useState<{ fair?: number | null; fit?: 'Conservative' | 'Fair' | 'Stretch' | 'Aggressive' | '-'; fairEta?: number | null } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetch(`/api/price/candles/${encodeURIComponent(t)}?res=D&days=60`, { cache: 'no-store' }).then(r=>r.json());
+        if (!alive) return;
+        const rows = Array.isArray(j?.candles) ? j.candles : [];
+        if (!rows.length) { setState({ fair: null, fit: '-' }); return; }
+        // ATR(14)
+        const highs = rows.map((k:any)=>Number(k.h));
+        const lows  = rows.map((k:any)=>Number(k.l));
+        const closes= rows.map((k:any)=>Number(k.c));
+        const TR: number[] = [];
+        for (let i=1;i<rows.length;i++){
+          const h=highs[i], l=lows[i], pc=closes[i-1];
+          if ([h,l,pc].every(Number.isFinite)) {
+            TR.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+          }
+        }
+        const period = 14;
+        const atr = TR.length >= period ? TR.slice(-period).reduce((a,b)=>a+b,0)/period : null;
+        const lastClose = closes[closes.length-1];
+        // 20D swing extremes
+        const lookback = 20;
+        const recentHigh = Math.max(...highs.slice(-lookback));
+        const recentLow  = Math.min(...lows.slice(-lookback));
+        let base = entry ?? lastClose;
+        if (!Number.isFinite(base) || base == null) base = lastClose;
+        let fair = null as number | null;
+        // Decide direction: use target vs base if available, else assume long
+        let dir: 1 | -1 = 1;
+        if (target != null && Number.isFinite(base as number)) {
+          dir = (target as number) >= (base as number) ? 1 : -1;
+        }
+        if (Number.isFinite(base)) {
+          if (dir === 1) {
+            const atrTargetUp = atr != null ? (base as number) + 2 * atr : null;
+            fair = Math.max(atrTargetUp ?? 0, Number.isFinite(recentHigh) ? recentHigh : 0) || null;
+          } else {
+            const atrTargetDn = atr != null ? (base as number) - 2 * atr : null;
+            fair = Math.min(atrTargetDn ?? Number.POSITIVE_INFINITY, Number.isFinite(recentLow) ? recentLow : Number.POSITIVE_INFINITY);
+            if (!Number.isFinite(fair as number)) fair = atrTargetDn; // fallback
+          }
+        }
+        // Fit evaluation if user target provided (compare distances from base)
+        let fit: 'Conservative' | 'Fair' | 'Stretch' | 'Aggressive' | '-' = '-';
+        if (target != null && fair != null && Number.isFinite(base as number)) {
+          const distT = Math.abs((target as number) - (base as number));
+          const distF = Math.abs((fair as number) - (base as number));
+          if (distF > 0) {
+            const ratio = distT / distF;
+            if (ratio <= 0.8) fit = 'Conservative';
+            else if (ratio < 1.2) fit = 'Fair';
+            else if (ratio < 1.5) fit = 'Stretch';
+            else fit = 'Aggressive';
+          }
+        }
+        // Fair ETA
+        let fairEta: number | null = null;
+        if (atr && Number.isFinite(base as number) && fair != null) {
+          const distFair = Math.abs((fair as number) - (base as number));
+          fairEta = distFair > 0 && atr > 0 ? Math.max(1, Math.ceil(distFair / atr)) : null;
+        }
+        setState({ fair, fit, fairEta });
+      } catch { if (alive) setState({ fair: null, fit: '-' }); }
+    })();
+    return () => { alive = false; };
+  }, [t, entry, target]);
+
+  const fairTxt = state?.fair == null ? '—' : state.fair.toFixed(2);
+  const fit = state?.fit ?? '-';
+  const color = fit === 'Fair' ? 'text-green-700' : fit === 'Conservative' ? 'text-gray-600' : fit === 'Stretch' ? 'text-amber-600' : fit === 'Aggressive' ? 'text-red-600' : '';
+  return (
+    <>
+      <td className="p-2 border" title={state?.fairEta ? `Fair ETA: ${state.fairEta} days` : ''}>{fairTxt}</td>
+      <td className={`p-2 border whitespace-nowrap ${color}`}>{fit}</td>
+    </>
+  );
+}
+
+// -------- ETA (trading days) to reach user target using ATR(14) --------
+function EtaDaysCell({ t, current, entry, target }: { t: string; current: number | null; entry: number | null; target: number | null }) {
+  const [eta, setEta] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (target == null) { if (alive) setEta(null); return; }
+        const j = await fetch(`/api/price/candles/${encodeURIComponent(t)}?res=D&days=60`, { cache: 'no-store' }).then(r=>r.json());
+        const rows = Array.isArray(j?.candles) ? j.candles : [];
+        if (!rows.length) { if (alive) setEta(null); return; }
+        const highs = rows.map((k:any)=>Number(k.h));
+        const lows  = rows.map((k:any)=>Number(k.l));
+        const closes= rows.map((k:any)=>Number(k.c));
+        const TR: number[] = [];
+        for (let i=1;i<rows.length;i++){
+          const h=highs[i], l=lows[i], pc=closes[i-1];
+          if ([h,l,pc].every(Number.isFinite)) TR.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+        }
+        const period = 14;
+        const atr = TR.length >= period ? TR.slice(-period).reduce((a,b)=>a+b,0)/period : null;
+        const base = (current != null ? current : (entry != null ? entry : closes[closes.length-1])) as number | null;
+        if (atr == null || !Number.isFinite(atr) || !Number.isFinite(base as number)) { if (alive) setEta(null); return; }
+        const dist = Math.abs((target as number) - (base as number));
+        const days = dist > 0 && atr > 0 ? Math.max(1, Math.ceil(dist / atr)) : null;
+        if (alive) setEta(days);
+      } catch { if (alive) setEta(null); }
+    })();
+    return () => { alive = false; };
+  }, [t, current, entry, target]);
+
+  return <td className="p-2 border">{eta == null ? '—' : eta}</td>;
+}
+
+// Swing snapshot: TA summary + RS vs SPY + ATR%
+function SwingBadge({ t }: { t: string }) {
+  const [state, setState] = useState<{ summary?: string; score?: number; rsPct?: number | null; atrPct?: number | null } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        // TA summary
+        const taR = await fetch(`/api/ta/${encodeURIComponent(t)}?tf=D`, { cache: 'no-store' });
+        const taJ = await taR.json();
+        // RS and ATR from candles
+        const [cd, spy] = await Promise.all([
+          fetch(`/api/price/candles/${encodeURIComponent(t)}?res=D&days=60`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({})),
+          fetch(`/api/price/candles/SPY?res=D&days=60`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({})),
+        ]);
+        let rsPct: number | null = null; let atrPct: number | null = null;
+        if (Array.isArray(cd?.candles) && cd.candles.length >= 20 && Array.isArray(spy?.candles) && spy.candles.length >= 20) {
+          const cT = cd.candles.map((k: any)=>Number(k.c)).filter((x:number)=>Number.isFinite(x));
+          const cS = spy.candles.map((k: any)=>Number(k.c)).filter((x:number)=>Number.isFinite(x));
+          const lastT = cT[cT.length-1]; const lastS = cS[cS.length-1];
+          const t20 = cT[cT.length-21]; const s20 = cS[cS.length-21];
+          if (Number.isFinite(lastT) && Number.isFinite(lastS) && Number.isFinite(t20) && Number.isFinite(s20) && t20>0 && s20>0) {
+            const pctT = (lastT - t20)/t20*100; const pctS = (lastS - s20)/s20*100; rsPct = pctT - pctS;
+          }
+          // ATR(14)
+          let atr = 0; const period = 14;
+          const highs = cd.candles.map((k:any)=>Number(k.h));
+          const lows = cd.candles.map((k:any)=>Number(k.l));
+          const closes = cT;
+          const TR: number[] = [];
+          for (let i=1;i<highs.length;i++){
+            const h=highs[i], l=lows[i], pc=closes[i-1];
+            if ([h,l,pc].every(Number.isFinite)) {
+              const tr = Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc));
+              TR.push(tr);
+            }
+          }
+          if (TR.length >= period) {
+            const last14 = TR.slice(-period);
+            atr = last14.reduce((a,b)=>a+b,0)/period;
+            atrPct = lastT>0 ? (atr/lastT)*100 : null;
+          }
+        }
+        if (alive) setState({ summary: taJ?.summary, score: taJ?.score, rsPct, atrPct });
+      } catch { if (alive) setState(null); }
+    })();
+    return () => { alive = false; };
+  }, [t]);
+
+  if (!state) return <span className="text-xs text-gray-500">—</span>;
+  const label = state.summary || 'Neutral';
+  const color = label.includes('Buy') ? 'success' : label.includes('Sell') ? 'destructive' : 'muted';
+  const parts: string[] = [];
+  if (state.rsPct != null) parts.push(`RS20 ${state.rsPct>=0?'+':''}${state.rsPct.toFixed(1)}%`);
+  if (state.atrPct != null) parts.push(`ATR ${state.atrPct.toFixed(1)}%`);
+  const tip = `${label}  |  ${parts.join('  •  ')}`;
+  return <span title={tip}><Badge variant={color as any}>{label}</Badge></span>;
+}
+
+
 export default function CallsPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<"open" | "closed" | "hits">("open");
@@ -143,6 +417,10 @@ export default function CallsPage() {
   const [closedRows, setClosedRows] = useState<ClosedCallNorm[]>([]);
   const [closedLoading, setClosedLoading] = useState(true);
   const [closedErr, setClosedErr] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [intervalSec, setIntervalSec] = useState<number>(15);
+  const [momentumRefreshKey, setMomentumRefreshKey] = useState(0);
 
   // ========== OPEN: initial load ==========
   useEffect(() => {
@@ -203,23 +481,20 @@ export default function CallsPage() {
     return () => { canceled = true; };
   }, [searchTicker]);
 
-  // OPEN: 60s price refresher (batched)
-  useEffect(() => {
+  // Manual/On-demand price refreshers
+  const refreshOpenPrices = useCallback(async () => {
     if (rows.length === 0) return;
     const tickers = rows.map((r) => r.ticker);
-    const id = setInterval(async () => {
-      const batchSize = 8;
-      for (let i = 0; i < tickers.length; i += batchSize) {
-        const batch = tickers.slice(i, i + batchSize);
-        const updates = await Promise.all(batch.map((t) => fetchPrice(t)));
-        setRows((prev) => prev.map((row) => {
-          const idx = batch.indexOf(row.ticker);
-          return idx >= 0 ? { ...row, current: updates[idx] ?? row.current } : row;
-        }));
-        await sleep(0);
-      }
-    }, 60000);
-    return () => clearInterval(id);
+    const batchSize = 8;
+    for (let i = 0; i < tickers.length; i += batchSize) {
+      const batch = tickers.slice(i, i + batchSize);
+      const updates = await Promise.all(batch.map((t) => fetchPrice(t)));
+      setRows((prev) => prev.map((row) => {
+        const idx = batch.indexOf(row.ticker);
+        return idx >= 0 ? { ...row, current: updates[idx] ?? row.current } : row;
+      }));
+      await sleep(0);
+    }
   }, [rows]);
 
   // ========== CLOSED: load + normalize (mount + 60s)
@@ -298,16 +573,33 @@ export default function CallsPage() {
     return () => { alive = false; clearInterval(id); };
   }, [loadClosed, searchTicker]);
 
-  // CLOSED: 60s price refresher
-  useEffect(() => {
+  const refreshClosedPrices = useCallback(async () => {
     if (closedRows.length === 0) return;
     const tickers = closedRows.map((r) => r.ticker);
-    const id = setInterval(async () => {
-      const updates = await Promise.all(tickers.map((t) => fetchPrice(t)));
-      setClosedRows((prev) => prev.map((row, i) => ({ ...row, current_price: updates[i] ?? row.current_price })));
-    }, 60000);
+    const updates = await Promise.all(tickers.map((t) => fetchPrice(t)));
+    setClosedRows((prev) => prev.map((row, i) => ({ ...row, current_price: updates[i] ?? row.current_price })));
+  }, [closedRows]);
+
+  // Single button to refresh prices on demand
+  const handleRefreshPrices = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refreshOpenPrices(), refreshClosedPrices()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshOpenPrices, refreshClosedPrices]);
+
+  // Optional auto-refresh timer controlled by UI
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const ms = Math.max(5, Number(intervalSec) || 15) * 1000;
+    const id = setInterval(() => {
+      handleRefreshPrices();
+      setMomentumRefreshKey((k) => k + 1);
+    }, ms);
     return () => clearInterval(id);
-  }, [closedRows, closedRows.length]);
+  }, [autoRefresh, intervalSec, handleRefreshPrices]);
 
   // ========== UI ==========
   const openEmpty = !loading && !err && rows.length === 0;
@@ -316,9 +608,26 @@ export default function CallsPage() {
   return (
     <div className="p-4 max-w-7xl mx-auto">
       {/* Toolbar */}
+      {/* Row 1: Title + Actions (separate layer) */}
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">Calls</h1>
+        <div className="flex gap-3">
+          <Link href="/stocks" className="px-3 py-2 btn-outline-brand">📃 List Stocks</Link>
+          {(user?.role === 'admin' || user?.role === 'analyst') && (
+            <Link href="/admin/quick-open-call" className="px-3 py-2 btn-outline-brand">⚡ Quick Call</Link>
+          )}
+          {(user?.role === 'admin' || user?.role === 'analyst') && (
+            <Link href="/admin/bulk-quick-calls" className="px-3 py-2 btn-outline-brand">📥 Bulk Quick Calls</Link>
+          )}
+          {(user?.role === 'admin' || user?.role === 'analyst') && (
+            <Link href="/stocks/new" className="px-3 py-2 btn-brand hover:opacity-95">New Stock</Link>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: Tabs + Search + Auto refresh */}
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Calls</h1>
           <div className="inline-flex rounded border overflow-hidden">
             <button
               className={`px-3 py-1 text-sm ${tab === "open" ? "tab-active" : "bg-white"}`}
@@ -356,6 +665,22 @@ export default function CallsPage() {
               autoCapitalize="characters"
             />
             <Button type="submit" variant="outline" size="sm">Search</Button>
+            <div className="ml-2 inline-flex items-center gap-2 text-sm">
+              <span className="hidden sm:inline">Auto</span>
+              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
+            </div>
+            <div className="inline-flex items-center gap-1 text-sm">
+              <span>every</span>
+              <Input
+                type="number"
+                className="w-20"
+                min={5}
+                value={intervalSec}
+                onChange={(e) => setIntervalSec(Math.max(5, Number(e.target.value) || 15))}
+                disabled={!autoRefresh}
+              />
+              <span>sec</span>
+            </div>
             {searchTicker && (
               <Button
                 type="button"
@@ -368,26 +693,6 @@ export default function CallsPage() {
             )}
           </form>
         </div>
-        <div className="flex gap-2">
-          <Link href="/stocks" className="px-3 py-2 rounded border hover:bg-gray-50">
-            📃 List Stocks
-          </Link>
-          {(user?.role === 'admin' || user?.role === 'analyst') && (
-            <Link href="/admin/quick-open-call" className="px-3 py-2 rounded border hover:bg-gray-50">
-              ⚡ Quick Call
-            </Link>
-          )}
-          {(user?.role === 'admin' || user?.role === 'analyst') && (
-            <Link href="/admin/bulk-quick-calls" className="px-3 py-2 rounded border hover:bg-gray-50">
-              📥 Bulk Quick Calls
-            </Link>
-          )}
-          {(user?.role === 'admin' || user?.role === 'analyst') && (
-            <Link href="/stocks/new" className="px-3 py-2 rounded btn-brand hover:opacity-95">
-              ➕ New Stock
-            </Link>
-          )}
-        </div>
       </div>
 
       {/* OPEN TAB */}
@@ -397,7 +702,7 @@ export default function CallsPage() {
           {err && <p className="p-2 text-red-500">{err}</p>}
           {openEmpty && <p className="p-2">No open calls.</p>}
           {!loading && !err && rows.length > 0 && (
-            <div className="overflow-x-auto rounded">
+            <div className="nf-table-wrap overflow-x-auto rounded">
               <table className="nf-table text-sm">
                 <thead className="bg-gray-100">
                   <tr>
@@ -405,10 +710,16 @@ export default function CallsPage() {
                     <th className="p-2 border">Analyst</th>
                     <th className="p-2 border">Entry</th>
                     <th className="p-2 border">Target</th>
+                    <th className="p-2 border">Fair Target</th>
+                    <th className="p-2 border">Target Fit</th>
+                    <th className="p-2 border">ETA Days</th>
                     <th className="p-2 border">Target % (vs Entry)</th>
                     <th className="p-2 border">Remaining Gains %</th>
                     <th className="p-2 border">Current Price</th>
+                    <th className="p-2 border">5m Momentum</th>
+                    <th className="p-2 border">Swing</th>
                     <th className="p-2 border">Earnings %</th>
+                    <th className="p-2 border">Flow/RVOL/VWAP</th>
                     <th className="p-2 border">Entry Status</th>
                     <th className="p-2 border">Target Status</th>
                     <th className="p-2 border">Latest Buzz</th>
@@ -453,9 +764,13 @@ export default function CallsPage() {
                         </td>
                         <td className="p-2 border">{fmt(entry)}</td>
                         <td className="p-2 border">{fmt(target)}</td>
+                        <FairTargetCell t={ticker} entry={entry} target={target} />
+                        <EtaDaysCell t={ticker} current={current} entry={entry} target={target} />
                         <td className="p-2 border">{fmt(targetPct)}</td>
                         <td className="p-2 border">{fmt(remainingPct)}</td>
                         <td className="p-2 border">{fmt(current)}</td>
+                        <td className="p-2 border whitespace-nowrap"><Momentum5m t={ticker} refreshKey={momentumRefreshKey} /></td>
+                        <td className="p-2 border whitespace-nowrap"><SwingBadge t={ticker} /></td>
                         <td className={`p-2 border ${
                           earningsPct == null
                             ? ''
@@ -463,6 +778,7 @@ export default function CallsPage() {
                             ? 'bg-green-100 font-medium'
                             : 'bg-red-100 font-medium'
                         }`}>{fmt(earningsPct)}</td>
+                        <td className="p-2 border"><RVOLVWAP t={ticker} /></td>
                         <td className="p-2 border whitespace-nowrap">{entryStatus}</td>
                         <td className={`p-2 border whitespace-nowrap ${targetClass}`}>{targetStatus}</td>
                         <td className="p-2 border">
@@ -489,7 +805,7 @@ export default function CallsPage() {
           {closedErr && <p className="p-2 text-red-500">{closedErr}</p>}
           {closedEmpty && <p className="p-2">No closed calls.</p>}
           {!closedLoading && !closedErr && closedRows.length > 0 && (
-            <div className="overflow-x-auto rounded">
+            <div className="nf-table-wrap overflow-x-auto rounded">
               <table className="nf-table text-sm text-center">
                 <thead className="bg-gray-100">
                   <tr>
