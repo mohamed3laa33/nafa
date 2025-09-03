@@ -17,9 +17,11 @@ async function getCalls(req: AuthenticatedRequest) {
   const analyst = searchParams.get("analyst");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const limitParam = Number(searchParams.get("limit") || 0);
+  const pageParam = Number(searchParams.get("page") || 0);
 
   let query =
-    "SELECT c.*, s.ticker, u.id AS opened_by_id, u.email AS opened_by FROM stock_calls c JOIN stocks s ON c.stock_id = s.id LEFT JOIN users u ON u.id = c.opened_by_user_id";
+    "SELECT c.*, s.ticker, u.id AS opened_by_id, COALESCE(u.username, u.email) AS opened_by FROM stock_calls c JOIN stocks s ON c.stock_id = s.id LEFT JOIN users u ON u.id = c.opened_by_user_id";
   const whereClauses: string[] = [];
   const params: (string | number | (string | number)[])[] = [];
 
@@ -74,6 +76,17 @@ async function getCalls(req: AuthenticatedRequest) {
 
   if (whereClauses.length > 0) {
     query += ` WHERE ${whereClauses.join(" AND ")}`;
+  }
+
+  // Order + pagination
+  query += " ORDER BY c.opened_at DESC";
+  if (limitParam && pageParam) {
+    const limit = Math.min(100, Math.max(1, limitParam));
+    const page = Math.max(1, pageParam);
+    const offset = (page - 1) * limit;
+    query += " LIMIT ? OFFSET ?";
+    // @ts-ignore
+    params.push(limit, offset);
   }
 
   const [rows] = await pool.execute(query, params);

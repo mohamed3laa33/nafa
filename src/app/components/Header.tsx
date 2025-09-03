@@ -38,6 +38,7 @@ export default function Header() {
         </Link>
         <Link href={user ? "/calls" : "/"} className="font-bold">Dashboard</Link>
         <Link href="/calls">Open Calls</Link>
+        <Link href="/scans">Scans</Link>
         <Link href="/all-closed-calls">Closed Calls</Link>
         <Link href="/stocks">Stocks</Link>
         <Link href="/analysts">Analysts</Link>

@@ -165,7 +165,7 @@ async function fetchCandles(ticker: string, res: '1' | 'D', days: number): Promi
 }
 
 function RVOLVWAP({ t }: { t: string }) {
-  const [state, setState] = useState<{ rvol?: number | null; vwap?: number | null; distPct?: number | null }>({});
+  const [state, setState] = useState<{ rvol?: number | null; vwap?: number | null; distPct?: number | null; regVwap?: number | null; regDistPct?: number | null }>({});
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -177,29 +177,45 @@ function RVOLVWAP({ t }: { t: string }) {
 
       const m = await fetchCandles(t, '1', 1);
       let vwap: number | null = null;
+      let regVwap: number | null = null;
       if (m && m.length) {
         let volSum = 0, pvSum = 0;
+        let regVolSum = 0, regPvSum = 0;
         for (const k of m) {
           const typical = (Number(k.h) + Number(k.l) + Number(k.c)) / 3;
           const v = Number(k.v || 0);
           if (!Number.isFinite(typical) || !Number.isFinite(v)) continue;
           pvSum += typical * v;
           volSum += v;
+          const dt = new Date(Number(k.t));
+          const hh = dt.getHours(); const mm = dt.getMinutes();
+          const mins = hh * 60 + mm;
+          // Regular session approx 9:30–16:00 ET; allow local offset approximation
+          if (mins >= 9 * 60 + 30 && mins <= 16 * 60) {
+            regPvSum += typical * v; regVolSum += v;
+          }
         }
         vwap = volSum > 0 ? pvSum / volSum : null;
+        regVwap = regVolSum > 0 ? regPvSum / regVolSum : null;
       }
       let distPct: number | null = null;
+      let regDistPct: number | null = null;
       if (vwap != null) {
         const last = m?.[m.length - 1]?.c;
         if (Number.isFinite(last) && vwap > 0) distPct = ((Number(last) - vwap) / vwap) * 100;
       }
-      if (alive) setState({ rvol, vwap, distPct });
+      if (regVwap != null) {
+        const last = m?.[m.length - 1]?.c;
+        if (Number.isFinite(last) && regVwap > 0) regDistPct = ((Number(last) - regVwap) / regVwap) * 100;
+      }
+      if (alive) setState({ rvol, vwap, distPct, regVwap, regDistPct });
     })();
     return () => { alive = false; };
   }, [t]);
 
   const rvolTxt = state.rvol == null ? '—' : state.rvol.toFixed(2) + 'x';
   const distTxt = state.distPct == null ? '—' : (state.distPct >= 0 ? '+' : '') + state.distPct.toFixed(2) + '%';
+  const regTxt = state.regDistPct == null ? '' : `  •  R-VWAP Δ: ${(state.regDistPct >= 0 ? '+' : '') + state.regDistPct.toFixed(2)}%`;
   return (
     <div className="flex flex-col gap-1 text-xs">
       <div>
@@ -209,6 +225,7 @@ function RVOLVWAP({ t }: { t: string }) {
       <div>
         <span className="text-gray-600">VWAP Δ: </span>
         <span className={`${state.distPct == null ? '' : state.distPct >= 0 ? 'text-green-600' : 'text-red-600'} font-medium`}>{distTxt}</span>
+        <span className="text-gray-500">{regTxt}</span>
       </div>
     </div>
   );
@@ -251,12 +268,24 @@ function FairTargetCell({ t, entry, target }: { t: string; entry: number | null;
         if (target != null && Number.isFinite(base as number)) {
           dir = (target as number) >= (base as number) ? 1 : -1;
         }
+        // Dynamic ATR multiplier from daily TA bias (Strong Buy/Buy/Neutral/Sell)
+        let k = 2.0;
+        try {
+          const taR = await fetch(`/api/ta/${encodeURIComponent(t)}?tf=D`, { cache: 'no-store' });
+          const taJ = await taR.json();
+          const label = String(taJ?.summary || 'Neutral');
+          if (label.includes('Strong Buy')) k = 2.8;
+          else if (label.includes('Buy')) k = 2.2;
+          else if (label.includes('Neutral')) k = 1.6;
+          else if (label.includes('Sell')) k = 1.3;
+          else if (label.includes('Strong Sell')) k = 1.0;
+        } catch {}
         if (Number.isFinite(base)) {
           if (dir === 1) {
-            const atrTargetUp = atr != null ? (base as number) + 2 * atr : null;
+            const atrTargetUp = atr != null ? (base as number) + k * atr : null;
             fair = Math.max(atrTargetUp ?? 0, Number.isFinite(recentHigh) ? recentHigh : 0) || null;
           } else {
-            const atrTargetDn = atr != null ? (base as number) - 2 * atr : null;
+            const atrTargetDn = atr != null ? (base as number) - k * atr : null;
             fair = Math.min(atrTargetDn ?? Number.POSITIVE_INFINITY, Number.isFinite(recentLow) ? recentLow : Number.POSITIVE_INFINITY);
             if (!Number.isFinite(fair as number)) fair = atrTargetDn; // fallback
           }
@@ -291,7 +320,7 @@ function FairTargetCell({ t, entry, target }: { t: string; entry: number | null;
   const color = fit === 'Fair' ? 'text-green-700' : fit === 'Conservative' ? 'text-gray-600' : fit === 'Stretch' ? 'text-amber-600' : fit === 'Aggressive' ? 'text-red-600' : '';
   return (
     <>
-      <td className="p-2 border" title={state?.fairEta ? `Fair ETA: ${state.fairEta} days` : ''}>{fairTxt}</td>
+      <td className="p-2 border bg-brand-soft" title={state?.fairEta ? `Fair ETA: ${state.fairEta} days` : ''}>{fairTxt}</td>
       <td className={`p-2 border whitespace-nowrap ${color}`}>{fit}</td>
     </>
   );
@@ -329,6 +358,122 @@ function EtaDaysCell({ t, current, entry, target }: { t: string; current: number
   }, [t, current, entry, target]);
 
   return <td className="p-2 border">{eta == null ? '—' : eta}</td>;
+}
+
+// Fair ETA (days) based on fair target computation
+function FairEtaCell({ t, entry, target }: { t: string; entry: number | null; target: number | null }) {
+  const [eta, setEta] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetch(`/api/price/candles/${encodeURIComponent(t)}?res=D&days=60`, { cache: 'no-store' }).then(r=>r.json());
+        const rows = Array.isArray(j?.candles) ? j.candles : [];
+        if (!rows.length) { if (alive) setEta(null); return; }
+        const highs = rows.map((k:any)=>Number(k.h));
+        const lows  = rows.map((k:any)=>Number(k.l));
+        const closes= rows.map((k:any)=>Number(k.c));
+        const TR: number[] = [];
+        for (let i=1;i<rows.length;i++){
+          const h=highs[i], l=lows[i], pc=closes[i-1];
+          if ([h,l,pc].every(Number.isFinite)) TR.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+        }
+        const period = 14;
+        const atr = TR.length >= period ? TR.slice(-period).reduce((a,b)=>a+b,0)/period : null;
+        const lastClose = closes[closes.length-1];
+        let base = entry ?? lastClose;
+        if (!Number.isFinite(base as number)) { if (alive) setEta(null); return; }
+        // direction from target if provided
+        let dir: 1 | -1 = 1;
+        if (target != null && Number.isFinite(base as number)) dir = (target as number) >= (base as number) ? 1 : -1;
+        const lookback = 20;
+        const recentHigh = Math.max(...highs.slice(-lookback));
+        const recentLow  = Math.min(...lows.slice(-lookback));
+        let fair: number | null = null;
+        if (dir === 1) {
+          const atrTargetUp = atr != null ? (base as number) + 2 * atr : null;
+          fair = Math.max(atrTargetUp ?? 0, Number.isFinite(recentHigh) ? recentHigh : 0) || null;
+        } else {
+          const atrTargetDn = atr != null ? (base as number) - 2 * atr : null;
+          fair = Math.min(atrTargetDn ?? Number.POSITIVE_INFINITY, Number.isFinite(recentLow) ? recentLow : Number.POSITIVE_INFINITY);
+          if (!Number.isFinite(fair as number)) fair = atrTargetDn;
+        }
+        if (atr && fair != null) {
+          const dist = Math.abs((fair as number) - (base as number));
+          const days = dist > 0 && atr > 0 ? Math.max(1, Math.ceil(dist / atr)) : null;
+          if (alive) setEta(days);
+        } else if (alive) setEta(null);
+      } catch { if (alive) setEta(null); }
+    })();
+    return () => { alive = false; };
+  }, [t, entry, target]);
+  return <td className="p-2 border">{eta == null ? '—' : eta}</td>;
+}
+
+// Suggested Stop and R-to-Target (R multiple), direction-aware
+function RiskCell({ t, entry, target }: { t: string; entry: number | null; target: number | null }) {
+  const [state, setState] = useState<{ stop?: number | null; rMultiple?: number | null } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetch(`/api/price/candles/${encodeURIComponent(t)}?res=D&days=60`, { cache: 'no-store' }).then(r=>r.json());
+        const rows = Array.isArray(j?.candles) ? j.candles : [];
+        if (!rows.length) { if (alive) setState({ stop: null, rMultiple: null }); return; }
+        const highs = rows.map((k:any)=>Number(k.h));
+        const lows  = rows.map((k:any)=>Number(k.l));
+        const closes= rows.map((k:any)=>Number(k.c));
+        const TR: number[] = [];
+        for (let i=1;i<rows.length;i++){
+          const h=highs[i], l=lows[i], pc=closes[i-1];
+          if ([h,l,pc].every(Number.isFinite)) TR.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+        }
+        const period = 14;
+        const atr = TR.length >= period ? TR.slice(-period).reduce((a,b)=>a+b,0)/period : null;
+        let base = entry ?? closes[closes.length-1];
+        if (!Number.isFinite(base as number) || atr == null || !(atr > 0)) { if (alive) setState({ stop: null, rMultiple: null }); return; }
+        // Direction from target if provided; default long
+        let dir: 1 | -1 = 1;
+        if (target != null) dir = (target as number) >= (base as number) ? 1 : -1;
+        // Dynamic stop multiplier from TA summary
+        let ks = 1.2; // default
+        try {
+          const taR = await fetch(`/api/ta/${encodeURIComponent(t)}?tf=D`, { cache: 'no-store' });
+          const taJ = await taR.json();
+          const label = String(taJ?.summary || 'Neutral');
+          if (label.includes('Strong Buy')) ks = 1.6;
+          else if (label.includes('Buy')) ks = 1.4;
+          else if (label.includes('Neutral')) ks = 1.2;
+          else if (label.includes('Sell')) ks = 1.0;
+          else if (label.includes('Strong Sell')) ks = 0.8;
+        } catch {}
+        let stop: number | null = null;
+        if (dir === 1) stop = (base as number) - ks * atr; else stop = (base as number) + ks * atr;
+        // R multiple to user target if provided
+        let rMultiple: number | null = null;
+        if (target != null && Number.isFinite(stop)) {
+          if (dir === 1) {
+            const risk = (base as number) - (stop as number);
+            const reward = (target as number) - (base as number);
+            if (risk > 0) rMultiple = reward / risk;
+          } else {
+            const risk = (stop as number) - (base as number);
+            const reward = (base as number) - (target as number);
+            if (risk > 0) rMultiple = reward / risk;
+          }
+        }
+        if (alive) setState({ stop, rMultiple });
+      } catch { if (alive) setState({ stop: null, rMultiple: null }); }
+    })();
+    return () => { alive = false; };
+  }, [t, entry, target]);
+
+  return (
+    <>
+      <td className="p-2 border">{state?.stop == null ? '—' : state.stop.toFixed(2)}</td>
+      <td className="p-2 border">{state?.rMultiple == null ? '—' : state.rMultiple.toFixed(2)}x</td>
+    </>
+  );
 }
 
 // Swing snapshot: TA summary + RS vs SPY + ATR%
@@ -707,14 +852,16 @@ export default function CallsPage() {
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="p-2 border">Stock Ticker</th>
-                    <th className="p-2 border">Analyst</th>
                     <th className="p-2 border">Entry</th>
                     <th className="p-2 border">Target</th>
                     <th className="p-2 border">Fair Target</th>
                     <th className="p-2 border">Target Fit</th>
+                    <th className="p-2 border">Fair ETA</th>
                     <th className="p-2 border">ETA Days</th>
+                    <th className="p-2 border">Sugg Stop</th>
+                    <th className="p-2 border">R to Tgt</th>
                     <th className="p-2 border">Target % (vs Entry)</th>
-                    <th className="p-2 border">Remaining Gains %</th>
+                    <th className="p-2 border" title="(target - current) / current * 100">Remain % (vs Current)</th>
                     <th className="p-2 border">Current Price</th>
                     <th className="p-2 border">5m Momentum</th>
                     <th className="p-2 border">Swing</th>
@@ -725,14 +872,16 @@ export default function CallsPage() {
                     <th className="p-2 border">Latest Buzz</th>
                     <th className="p-2 border">Latest News</th>
                     <th className="p-2 border">Entry Date</th>
+                    <th className="p-2 border">Analyst</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map(({ id, ticker, entry, target, current, openedAt, openedBy, openedById }) => {
                     const targetPct =
                       entry != null && entry > 0 && target != null ? ((target - entry) / entry) * 100 : null;
+                    // Remaining upside from CURRENT price (more intuitive for entry/hold decisions)
                     const remainingPct =
-                      current != null && target != null && target !== 0 ? ((target - current) / target) * 100 : null;
+                      current != null && current > 0 && target != null ? ((target - current) / current) * 100 : null;
                     const earningsPct =
                       entry != null && entry > 0 && current != null ? ((current - entry) / entry) * 100 : null;
 
@@ -755,20 +904,20 @@ export default function CallsPage() {
                     return (
                       <tr key={id} className="hover:bg-gray-50">
                         <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="brand-link underline">{ticker}</Link></td>
-                        <td className="p-2 border whitespace-nowrap">
-                          {openedById ? (
-                            <Link href={`/analysts/${openedById}`} className="underline">{openedBy ?? openedById}</Link>
-                          ) : (
-                            openedBy ?? '-'
-                          )}
-                        </td>
                         <td className="p-2 border">{fmt(entry)}</td>
                         <td className="p-2 border">{fmt(target)}</td>
                         <FairTargetCell t={ticker} entry={entry} target={target} />
+                        <FairEtaCell t={ticker} entry={entry} target={target} />
                         <EtaDaysCell t={ticker} current={current} entry={entry} target={target} />
+                        <RiskCell t={ticker} entry={entry} target={target} />
                         <td className="p-2 border">{fmt(targetPct)}</td>
-                        <td className="p-2 border">{fmt(remainingPct)}</td>
-                        <td className="p-2 border">{fmt(current)}</td>
+                        <td
+                          className="p-2 border"
+                          title={current != null && current > 0 && target != null ? `(( ${fmt(target)} - ${fmt(current)} ) / ${fmt(current)} ) * 100` : ''}
+                        >
+                          {fmt(remainingPct)}
+                        </td>
+                        <td className="p-2 border bg-brand-soft">{fmt(current)}</td>
                         <td className="p-2 border whitespace-nowrap"><Momentum5m t={ticker} refreshKey={momentumRefreshKey} /></td>
                         <td className="p-2 border whitespace-nowrap"><SwingBadge t={ticker} /></td>
                         <td className={`p-2 border ${
@@ -788,6 +937,13 @@ export default function CallsPage() {
                           <News t={ticker} />
                         </td>
                         <td className="p-2 border">{ymd(openedAt)}</td>
+                        <td className="p-2 border whitespace-nowrap">
+                          {openedById ? (
+                            <Link href={`/analysts/${openedById}`} className="underline">{(openedBy ?? openedById).split('@')[0]}</Link>
+                          ) : (
+                            (openedBy ?? '-').split('@')[0]
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

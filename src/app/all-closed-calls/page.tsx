@@ -85,7 +85,7 @@ export default function AllClosedCallsPage() {
       {closed.length === 0 ? (
         <p>No closed calls.</p>
       ) : (
-        <div className="overflow-x-auto rounded">
+        <div className="nf-table-wrap overflow-x-auto rounded">
           <table className="nf-table text-sm">
             <thead className="bg-gray-100">
               <tr>

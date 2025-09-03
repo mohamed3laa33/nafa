@@ -66,6 +66,19 @@ async function finnhubName(symbol: string): Promise<string | null> {
 async function listStocks(req: AuthenticatedRequest) {
   const { searchParams } = new URL(req.url);
 
+  const tickersParam = searchParams.get('tickers');
+  if (tickersParam) {
+    const list = tickersParam.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+    if (list.length === 0) return NextResponse.json({ data: [] });
+    const placeholders = list.map(() => '?').join(',');
+    const [rows] = await pool.query(
+      `SELECT id, ticker FROM stocks WHERE ticker IN (${placeholders})`,
+      list
+    );
+    // @ts-ignore
+    return NextResponse.json({ data: rows });
+  }
+
   const limitNum  = Math.min(100, Math.max(1, Number(searchParams.get("limit") || 20)));
   const pageNum   = Math.max(1, Number(searchParams.get("page") || 1));
   const offsetNum = (pageNum - 1) * limitNum;

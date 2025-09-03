@@ -4,6 +4,7 @@ import { pool } from "@/lib/db";
 import { withAuth, AuthenticatedRequest } from "@/lib/rbac";
 import { z } from "zod";
 import { hashPassword } from "@/lib/auth";
+import { v4 as uuidv4 } from "uuid";
 
 export async function GET() {
   try {
@@ -60,22 +61,21 @@ async function createAnalyst(req: AuthenticatedRequest) {
     }
 
     const passwordHash = await hashPassword(password);
-    let result: any;
+    const id = uuidv4();
     try {
-      // Try inserting with username column; explicitly pass id=NULL for strict modes
-      [result] = await pool.execute(
-        "INSERT INTO users (id, username, email, password_hash, role) VALUES (NULL, ?, ?, ?, 'analyst')",
-        [username, email, passwordHash]
+      // Try inserting with username column
+      await pool.execute(
+        "INSERT INTO users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, 'analyst')",
+        [id, username, email, passwordHash]
       );
     } catch (e: any) {
-      // Fallback if username column does not exist yet; keep id=NULL for strict modes
-      [result] = await pool.execute(
-        "INSERT INTO users (id, email, password_hash, role) VALUES (NULL, ?, ?, 'analyst')",
-        [email, passwordHash]
+      // Fallback if username column does not exist yet
+      await pool.execute(
+        "INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, 'analyst')",
+        [id, email, passwordHash]
       );
     }
 
-    const id = result.insertId ?? null;
     return NextResponse.json({ id, username, email, role: 'analyst' }, { status: 201 });
   } catch (e) {
     console.error("Failed to create analyst:", e);

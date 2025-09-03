@@ -84,7 +84,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
   }
 
   return (
-  <div className="overflow-x-auto rounded">
+  <div className="nf-table-wrap overflow-x-auto rounded">
       <table className="nf-table text-sm">
         <thead className="bg-gray-100">
           <tr>

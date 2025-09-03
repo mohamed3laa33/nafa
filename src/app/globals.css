@@ -33,3 +33,16 @@ a:hover { text-decoration: underline; }
 /* Outline brand button */
 .btn-outline-brand { color: var(--brand); background: transparent; border: 2px solid var(--brand); border-radius: .5rem; }
 .btn-outline-brand:hover { background: rgba(99,43,168,0.06); }
+
+/* Compact mode to reduce horizontal scroll */
+.nf-compact .nf-table { table-layout: fixed; font-size: 12px; }
+.nf-compact .nf-table th, .nf-compact .nf-table td { padding: 6px 6px; }
+.nf-col-6ch { width: 6ch; }
+.nf-col-8ch { width: 8ch; }
+.nf-col-10ch { width: 10ch; }
+.nf-col-12ch { width: 12ch; }
+.nf-wrap { white-space: normal; word-break: break-word; }
+.nf-nowrap { white-space: nowrap; }
+
+/* Soft brand background to highlight key numeric cells */
+.bg-brand-soft { background: rgba(99, 43, 168, 0.08); }

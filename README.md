@@ -1,71 +1,142 @@
-This is a [Next.js](https://nextjs.org) project.
+# NAFAA – Local Development Guide
 
-What’s been added recently
+This guide helps you spin up the app locally on a fresh machine, including the database, migrations, and handy endpoints for bootstrapping data.
 
-- Trading dashboard upgrades
-  - TV‑like chart with candles + volume + AlphaTrend overlay
-  - Timeframes: 1m/5m/15m/1h/2h/1D and auto fit
-  - Fallback to TradingView widget when a symbol lacks data
-- Price data reliability
-  - New intraday candles API with provider fallbacks: Finnhub → Yahoo → Stooq (daily)
-  - Simple in‑memory caching layer for API responses (TTL)
-  - Basic rate limiting middleware on `/api/*`
-- UX tweaks
-  - Calls tables centered and green/red result coloring
-  - Clickable tickers to stock overview
-  - All‑Closed‑Calls shows entry/stop across legacy/new shapes
-- Starter watchlist page (client‑only) at `/watchlist`
+## 1) Prerequisites
 
-Environment variables
+- Node.js 20+ (LTS)
+- npm 10+ (or pnpm/yarn if you prefer)
+- MySQL 8.x (or compatible MariaDB)
+- Git
 
-- `FINNHUB_API_KEY` optional (intraday source; Yahoo fallback is used when absent)
-- `SESSION_COOKIE_NAME`, DB config, etc. (see `.env.example`)
+## 2) Clone + Install
 
-Key files
+```bash
+git clone https://github.com/mohamed3laa33/nafa.git
+cd nafa
+npm install
+```
 
-- `src/components/TVLikeChart.tsx` – main in‑app chart (Lightweight Charts, client)
-- `src/app/api/price/candles/[ticker]/route.ts` – intraday/daily candles API
-- `src/lib/cache.ts` – small TTL cache used by price APIs
-- `src/middleware.ts` – rate limit for `/api/*`
+## 3) Environment Variables
 
-Next steps (pro plan)
+Create `.env.local` in the project root:
 
-- Add crosshair tooltips, axis labels, and range presets to the chart
-- Move cache to Redis, add retries + circuit breaker
-- Alerts MVP (entry/stop/target hit) via queue + email
-- Plans, billing (Stripe), and server‑side feature flags
+```bash
+# App
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+NODE_ENV=development
 
-## Getting Started
+# Database
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=nafa
+DB_PASSWORD=secret
+DB_NAME=nafa
 
-First, run the development server:
+# Optional providers (improve free data quality if available)
+FINNHUB_API_KEY=
+```
+
+The app expects a MySQL database reachable via these env vars. The connection helper reads from the above.
+
+## 4) Create Database
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS nafa CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+# Create user if you want
+mysql -u root -p -e "CREATE USER IF NOT EXISTS 'nafa'@'%' IDENTIFIED BY 'secret'; GRANT ALL ON nafa.* TO 'nafa'@'%'; FLUSH PRIVILEGES;"
+```
+
+## 5) Apply Migrations
+
+Migrations are plain SQL files in `migrations/` and are safe to run sequentially. On a fresh DB run:
+
+```bash
+# From the repo root
+for f in migrations/*.sql; do echo "Applying $f"; mysql -u nafa -psecret nafa < "$f"; done
+```
+
+Notable migrations:
+- `2025-09-02_add_is_public.sql` – adds `stock_calls.is_public` for public calls.
+- `2025-09-02_add_username_to_users.sql` – adds `users.username` for nicer analyst display names.
+
+If you already have an existing schema, apply only the migrations you need.
+
+## 6) Start the App
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# App on http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 7) Bootstrap Users
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+There is a `/signup` page for viewer/analyst creation, and an admin-only API for adding analysts.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Sign up a viewer/analyst: http://localhost:3000/signup
+- Promote a user to admin (SQL):
 
-## Learn More
+```sql
+UPDATE users SET role='admin' WHERE email='you@example.com' LIMIT 1;
+```
 
-To learn more about Next.js, take a look at the following resources:
+- Admin add analyst (username/email/password):
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+curl -X POST http://localhost:3000/api/analysts \
+  -H 'Content-Type: application/json' \
+  --cookie "session=<your_session_cookie>" \
+  -d '{"username":"jdoe","email":"jdoe@example.com","password":"Passw0rd!"}'
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 8) Useful Endpoints (dev)
 
-## Deploy on Vercel
+- Calls lists (role-aware):
+  - Open: `GET /api/calls?status=open`
+  - Closed: `GET /api/calls?status=closed`
+  - Filters: `&ticker=XXX`, `&limit=10&page=1`
+- Price helpers (free sources):
+  - `GET /api/price/:ticker` – latest price (Yahoo proxy)
+  - `GET /api/price/candles/:ticker?res=D&days=60` – OHLCV candles (Yahoo/Stooq fallback)
+  - `GET /api/price/flow/:ticker?window=5m` – simple buy/sell flow proxy from 1‑minute bars
+- Technical snapshot:
+  - `GET /api/ta/:ticker?tf=D` – MA/RSI/MACD summary (Strong Buy…Strong Sell)
+- Scans:
+  - `GET /api/scans/gappers` – gap leaders
+  - `GET /api/scans/momentum` – 5m momentum + RVOL
+  - `GET /api/scans/unusual` – RVOL ≥ 2x
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 9) UI Pages
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Calls board: `/calls`
+- Scans: `/scans`
+- Stocks list: `/stocks`
+- Stock details: `/stocks/:id`
+- Admin quick calls: `/admin/quick-open-call`, `/admin/bulk-quick-calls`
+
+## 10) Notes on Data Quality
+
+This stack uses free data sources for development and prototyping:
+- Yahoo Finance chart APIs (minute/day) – suitable for scanning and display, not for execution-grade timestamps.
+- Optional Finnhub key (daily candles/name lookup) – improves coverage.
+
+For production accuracy, consider upgrading to a paid consolidated feed (Polygon, Intrinio, Nasdaq Basic, etc.) and swap the price/candles providers.
+
+## 11) Troubleshooting
+
+- 500 on `/api/scans/*`: ensure `NEXT_PUBLIC_BASE_URL` is set and accessible, or the app is run on localhost:3000 so internal fetches resolve.
+- Missing columns:
+  - Run the migrations (see step 5).
+- Analyst name shows email:
+  - `users.username` is NULL – add a username or re-create the analyst via admin POST.
+
+## 12) Contributing Flow (local)
+
+- Create a branch, run dev server, and verify changes.
+- Keep migrations self‑contained and idempotent where possible.
+- Open a PR with a short summary and test notes.
+
+---
+
+If you want, I can add a simple SQL bootstrap (minimal schema + seed) for a totally clean start on brand‑new DBs.
+

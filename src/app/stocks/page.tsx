@@ -55,7 +55,7 @@ export default async function StocksPage() {
           )}
           {canCreate && (
             <Link href="/stocks/new" className="px-3 py-2 rounded btn-brand hover:opacity-95">
-              ➕ New Stock
+              New Stock
             </Link>
           )}
         </div>
@@ -64,7 +64,7 @@ export default async function StocksPage() {
       {rows.length === 0 ? (
         <p>No stocks yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded">
+        <div className="nf-table-wrap overflow-x-auto rounded">
           <table className="nf-table text-sm">
             <thead className="bg-gray-100">
               <tr>
