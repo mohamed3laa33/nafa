@@ -18,8 +18,8 @@ a:hover { text-decoration: underline; }
 .nf-table { width: 100%; border-collapse: collapse; background: var(--paper); color: var(--ink); }
 .nf-table th, .nf-table td { border: 1px solid var(--border) !important; }
 /* Sticky header */
-.nf-table thead th { position: sticky; top: 0; z-index: 2; background: var(--paper); border-bottom: 2px solid var(--brand); }
-.nf-table thead { position: relative; z-index: 2; }
+.nf-table thead { position: sticky; top: 0; z-index: 10; }
+.nf-table thead th { background: var(--paper); border-bottom: 2px solid var(--brand); }
 .nf-table tbody tr { border-bottom: 1px solid var(--border) !important; }
 
 /* Brand primitives */
