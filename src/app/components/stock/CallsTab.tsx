@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import PriceCell from "@/components/PriceCell";
 import { useAuth } from "@/app/AuthContext";
+import useCancellableFetch from "@/lib/useCancellableFetch";
 
 type CallStatus = "open" | "closed";
 type CallType = "buy" | "sell";
@@ -26,13 +28,15 @@ interface Call {
 interface CallsTabProps {
   stockId: string;            // UUID string
   isOwner: boolean;
+  ticker?: string;            // Optional: for live price column
 }
 
-export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
+export default function CallsTab({ stockId, isOwner, ticker }: CallsTabProps) {
   const { user } = useAuth();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const fetchWithCancel = useCancellableFetch();
 
   // Form state
   const [type, setType] = useState<CallType>("buy");
@@ -57,7 +61,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/stocks/${stockId}/calls`, { cache: "no-store" });
+      const res = await fetchWithCancel(`/api/stocks/${stockId}/calls`, { cache: "no-store" });
       if (!res.ok) {
         setError("Failed to fetch calls");
         setCalls([]);
@@ -73,7 +77,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
     } finally {
       setLoading(false);
     }
-  }, [stockId]);
+  }, [stockId, fetchWithCancel]);
 
   useEffect(() => {
     if (stockId) fetchCalls();
@@ -105,7 +109,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
     }
 
     try {
-      const res = await fetch(`/api/stocks/${stockId}/calls`, {
+      const res = await fetchWithCancel(`/api/stocks/${stockId}/calls`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -140,7 +144,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
     setError("");
 
     try {
-      const res = await fetch(`/api/calls/${callId}/close`, {
+      const res = await fetchWithCancel(`/api/calls/${callId}/close`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ outcome, which_target_hit }),
@@ -257,6 +261,7 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
           <thead>
             <tr className="text-left border-b">
               <th className="py-2 pr-4">Type</th>
+              {ticker && <th className="py-2 pr-4">Current</th>}
               <th className="py-2 pr-4">Entry</th>
               <th className="py-2 pr-4">Target</th>
               <th className="py-2 pr-4">Stop</th>
@@ -269,6 +274,9 @@ export default function CallsTab({ stockId, isOwner }: CallsTabProps) {
             {openCalls.map((c) => (
               <tr key={c.id} className="border-b">
                 <td className="py-2 pr-4 capitalize">{c.type}</td>
+                {ticker && (
+                  <td className="py-2 pr-4"><PriceCell ticker={ticker} /></td>
+                )}
                 <td className="py-2 pr-4">{!c.entry_price || c.entry_price === 0 ? '-' : c.entry_price}</td>
                 <td className="py-2 pr-4">{!c.target_price || c.target_price === 0 ? '-' : c.target_price}</td>
                 <td className="py-2 pr-4">{!c.stop_loss || c.stop_loss === 0 ? '-' : c.stop_loss}</td>

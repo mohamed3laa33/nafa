@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useCancellableFetch from "@/lib/useCancellableFetch";
 
 interface DetailsTabProps {
   stockId: number;
@@ -11,6 +12,7 @@ export default function DetailsTab({ stockId, isOwner }: DetailsTabProps) {
   const [details, setDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const fetchWithCancel = useCancellableFetch();
 
   // Raw textarea states + validation
   const [techText, setTechText] = useState("");
@@ -22,7 +24,7 @@ export default function DetailsTab({ stockId, isOwner }: DetailsTabProps) {
     async function fetchDetails() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/stocks/${stockId}/details`);
+        const res = await fetchWithCancel(`/api/stocks/${stockId}/details`);
         if (res.ok) {
           const data = await res.json();
           setDetails(data || {});
@@ -45,7 +47,7 @@ export default function DetailsTab({ stockId, isOwner }: DetailsTabProps) {
       setLoading(false);
     }
     fetchDetails();
-  }, [stockId]);
+  }, [stockId, fetchWithCancel]);
 
   const handleTechChange = (v: string) => {
     setTechText(v);
@@ -75,7 +77,7 @@ export default function DetailsTab({ stockId, isOwner }: DetailsTabProps) {
       return;
     }
     try {
-      const res = await fetch(`/api/stocks/${stockId}/details`, {
+      const res = await fetchWithCancel(`/api/stocks/${stockId}/details`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(details || {}),

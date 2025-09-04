@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import useCancellableFetch from "@/lib/useCancellableFetch";
 
 interface Reference {
   id: string;          // UUID
@@ -20,12 +21,13 @@ export default function ReferencesTab({ stockId, isOwner }: ReferencesTabProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [newLink, setNewLink] = useState("");
+  const fetchWithCancel = useCancellableFetch();
 
   const fetchReferences = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/stocks/${stockId}/refs`, { cache: "no-store" });
+      const res = await fetchWithCancel(`/api/stocks/${stockId}/refs`, { cache: "no-store" });
       if (!res.ok) {
         setError("Failed to fetch references");
         setReferences([]);
@@ -41,7 +43,7 @@ export default function ReferencesTab({ stockId, isOwner }: ReferencesTabProps) 
     } finally {
       setLoading(false);
     }
-  }, [stockId]);
+  }, [stockId, fetchWithCancel]);
 
   useEffect(() => {
     if (stockId) fetchReferences();
@@ -62,7 +64,7 @@ export default function ReferencesTab({ stockId, isOwner }: ReferencesTabProps) 
     if (!url) return;
 
     try {
-      const res = await fetch(`/api/stocks/${stockId}/refs`, {
+      const res = await fetchWithCancel(`/api/stocks/${stockId}/refs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // API expects { title, url, note? }
@@ -85,7 +87,7 @@ export default function ReferencesTab({ stockId, isOwner }: ReferencesTabProps) 
 
     setError("");
     try {
-      const res = await fetch(`/api/refs/${refId}`, { method: "DELETE" });
+      const res = await fetchWithCancel(`/api/refs/${refId}`, { method: "DELETE" });
       if (!res.ok) {
         setError("Failed to delete reference");
         return;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import useCancellableFetch from "@/lib/useCancellableFetch";
 
 type HedgeFundHolding = {
   investorName: string;
@@ -16,6 +17,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
   const [holdings, setHoldings] = useState<HedgeFundHolding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const fetchWithCancel = useCancellableFetch();
 
   useEffect(() => {
     if (!ticker) return;
@@ -23,7 +25,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`/api/hedge-fund-activity/${ticker}`);
+        const res = await fetchWithCancel(`/api/hedge-fund-activity/${ticker}`);
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const apiError = data?.apiError ? JSON.stringify(data.apiError) : "No details";
@@ -36,7 +38,7 @@ export default function HedgeFundsTab({ ticker }: { ticker: string }) {
         setLoading(false);
       }
     })();
-  }, [ticker]);
+  }, [ticker, fetchWithCancel]);
 
   const fmtNum = (n?: number | null) => (typeof n === 'number' && isFinite(n) ? n.toLocaleString() : '—');
   const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString() : '—');

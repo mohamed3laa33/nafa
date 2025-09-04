@@ -3,20 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-async function mapTickersToIds(tickers: string[]): Promise<Record<string, string>> {
-  try {
-    const qs = encodeURIComponent(tickers.join(','));
-    const r = await fetch(`/api/stocks?tickers=${qs}`, { cache: 'no-store' });
-    const j = await r.json();
-    if (!r.ok || !Array.isArray(j?.data)) return {};
-    const out: Record<string, string> = {};
-    for (const row of j.data) {
-      if (row?.ticker && row?.id) out[String(row.ticker)] = String(row.id);
-    }
-    return out;
-  } catch { return {}; }
-}
-
 type Row = {
   ticker: string;
   price?: number | null;
@@ -24,11 +10,11 @@ type Row = {
   rvol?: number | null;
   vwapDistPct?: number | null;
   momentum?: 'Buy' | 'Sell' | 'Neutral' | null;
+  id: string;
 };
 
 const Section = ({ title, endpoint }: { title: string; endpoint: string }) => {
   const [rows, setRows] = useState<Row[]>([]);
-  const [idMap, setIdMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   useEffect(() => {
@@ -36,14 +22,12 @@ const Section = ({ title, endpoint }: { title: string; endpoint: string }) => {
     (async () => {
       setLoading(true); setErr("");
       try {
-        const r = await fetch(`/api/scans/${endpoint}`, { cache: 'no-store' });
+        const r = await fetch(`/api/scans-opts?type=${endpoint}`, { cache: 'no-store' });
         const j = await r.json();
         if (!alive) return;
         if (!r.ok) throw new Error(j?.error || 'failed');
         const data = Array.isArray(j) ? j : [];
         setRows(data);
-        const ids = await mapTickersToIds(data.map((r: Row) => r.ticker));
-        if (alive) setIdMap(ids);
       } catch (e: any) { if (alive) setErr(e?.message || 'failed'); }
       finally { if (alive) setLoading(false); }
     })();
@@ -71,7 +55,7 @@ const Section = ({ title, endpoint }: { title: string; endpoint: string }) => {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.ticker} className="hover:bg-gray-50">
-                  <td className="p-2 border font-medium"><Link href={idMap[r.ticker] ? `/stocks/${idMap[r.ticker]}` : '/stocks'} className="brand-link underline">{r.ticker}</Link></td>
+                  <td className="p-2 border font-medium"><Link href={r.id ? `/stocks/${r.id}` : '/stocks'} className="brand-link underline">{r.ticker}</Link></td>
                   <td className="p-2 border">{r.price == null ? '—' : r.price.toFixed(2)}</td>
                   <td className="p-2 border">{r.gapPct == null ? '—' : r.gapPct.toFixed(2)}</td>
                   <td className="p-2 border">{r.rvol == null ? '—' : r.rvol.toFixed(2) + 'x'}</td>

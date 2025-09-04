@@ -109,7 +109,7 @@ export default function StockDetailPage() {
       {/* Tab content */}
       <div className="mt-4">
         {activeTab === "overview" && <OverviewTab stock={stock} />}
-        {activeTab === "calls" && <CallsTab stockId={stock.id} isOwner={isOwner} />}
+        {activeTab === "calls" && <CallsTab stockId={stock.id} isOwner={isOwner} ticker={stock.ticker} />}
       </div>
     </div>
   );

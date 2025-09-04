@@ -38,7 +38,7 @@ export default function Header() {
         </Link>
         <Link href={user ? "/calls" : "/"} className="font-bold">Dashboard</Link>
         <Link href="/calls">Open Calls</Link>
-        <Link href="/scans">Scans</Link>
+        {/* Scans disabled until prices table or alt source is available */}
         <Link href="/all-closed-calls">Closed Calls</Link>
         <Link href="/stocks">Stocks</Link>
         <Link href="/analysts">Analysts</Link>

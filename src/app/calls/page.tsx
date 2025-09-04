@@ -7,6 +7,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import PriceBadge from "@/components/PriceBadge";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
@@ -544,6 +545,104 @@ export default function CallsPage() {
   const [rows, setRows] = useState<OpenRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  // Pagination for OPEN
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const pageSize = 5;
+  // Column widths (resizable headers)
+  const defaultColW: Record<string, number> = {
+    ticker: 120, entry: 90, target: 90, fairTarget: 110, targetFit: 110,
+    fairEta: 90, etaDays: 90, stop: 110, rToTgt: 100, targetPct: 130,
+    remainPct: 150, current: 120, momentum: 120, swing: 110, tech: 140, newsSent: 140, earningsPct: 110,
+    flow: 170, entryStatus: 130, targetStatus: 130, buzz: 120, news: 120,
+    openedAt: 140, analyst: 150
+  };
+  const [colW, setColW] = useState<Record<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try { const s = localStorage.getItem('callsColW'); if (s) return { ...defaultColW, ...JSON.parse(s) }; } catch {}
+    }
+    return defaultColW;
+  });
+  useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('callsColW', JSON.stringify(colW)); }, [colW]);
+  const startResize = (col: string, startX: number) => {
+    const startWidth = colW[col] || 100;
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - startX;
+      setColW((prev) => ({ ...prev, [col]: Math.max(60, startWidth + dx) }));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // -------- Per-row chips (with client-side cache) --------
+  const indicatorsCache = (globalThis as any).__nf_ind_cache || ((globalThis as any).__nf_ind_cache = new Map<string, { t: number; d: any }>());
+  const newsCache = (globalThis as any).__nf_news_cache || ((globalThis as any).__nf_news_cache = new Map<string, { t: number; d: any }>());
+
+  function TechChip({ t }: { t: string }) {
+    const [d, setD] = useState<any | null>(null);
+    const [err, setErr] = useState<string | null>(null);
+    useEffect(() => {
+      let alive = true;
+      const key = t.toUpperCase();
+      const now = Date.now();
+      const hit = indicatorsCache.get(key);
+      const ttl = 15_000; // 15s cache
+      if (hit && now - hit.t < ttl) { setD(hit.d); return; }
+      (async () => {
+        try {
+          const r = await fetch(`/api/ta/indicators/${encodeURIComponent(t)}`, { cache: 'no-store' });
+          const j = await r.json();
+          if (!alive) return;
+          if (r.ok) { indicatorsCache.set(key, { t: now, d: j }); setD(j); }
+          else setErr(j?.error || 'failed');
+        } catch (e: any) { if (alive) setErr(e?.message || 'failed'); }
+      })();
+      return () => { alive = false; };
+    }, [t]);
+    if (err) return <span className="text-xs text-gray-500">—</span>;
+    if (!d) return <span className="text-xs text-gray-400">…</span>;
+    const rsi = d.rsi7 != null ? Number(d.rsi7).toFixed(0) : '—';
+    const macdUp = d.macdSlope3 != null ? Number(d.macdSlope3) > 0 : (d.macdHist != null ? Number(d.macdHist) > 0 : false);
+    const macd = macdUp ? '↑' : '↓';
+    const emaAlign = d.emaAligned ? '20>50' : '20<50';
+    const tip = `RSI7: ${d.rsi7?.toFixed?.(1) ?? '-'}  |  MACD slope3: ${d.macdSlope3?.toFixed?.(4) ?? '-'}  |  EMA align: ${emaAlign}`;
+    return <span className="text-xs" title={tip}>RSI {rsi} • MACD {macd} • {emaAlign}</span>;
+  }
+
+  function NewsChip({ t }: { t: string }) {
+    const [d, setD] = useState<any | null>(null);
+    const [err, setErr] = useState<string | null>(null);
+    useEffect(() => {
+      let alive = true;
+      const key = t.toUpperCase();
+      const now = Date.now();
+      const hit = newsCache.get(key);
+      const ttl = 300_000; // 5m cache for news
+      if (hit && now - hit.t < ttl) { setD(hit.d); return; }
+      (async () => {
+        try {
+          const r = await fetch(`/api/news-sentiment/${encodeURIComponent(t)}`, { cache: 'no-store' });
+          const j = await r.json();
+          if (!alive) return;
+          if (r.ok) { newsCache.set(key, { t: now, d: j }); setD(j); }
+          else setErr(j?.error || 'failed');
+        } catch (e: any) { if (alive) setErr(e?.message || 'failed'); }
+      })();
+      return () => { alive = false; };
+    }, [t]);
+    if (err) return <span className="text-xs text-gray-500">—</span>;
+    if (!d) return <span className="text-xs text-gray-400">…</span>;
+    const agg = Number(d.aggregate ?? 0);
+    const label = agg > 0.2 ? 'Bullish' : agg < -0.2 ? 'Bearish' : 'Neutral';
+    const color = label === 'Bullish' ? 'text-green-600' : label === 'Bearish' ? 'text-red-600' : 'text-gray-700';
+    const items = Array.isArray(d.items) ? d.items.slice(0,3) : [];
+    const tip = items.map((k:any)=>`${k.score>=0?'+':''}${(k.score||0).toFixed(2)}  ${k.title}`).join('\n');
+    return <span className={`text-xs ${color}`} title={tip}>{label}</span>;
+  }
   // SEARCH
   const [query, setQuery] = useState("");
   const [searchTicker, setSearchTicker] = useState<string>("");
@@ -558,6 +657,9 @@ export default function CallsPage() {
     return () => clearTimeout(handler);
   }, [query]);
 
+  // Reset to first page when search filter changes
+  useEffect(() => { setPage(1); }, [searchTicker]);
+
   // CLOSED
   const [closedRows, setClosedRows] = useState<ClosedCallNorm[]>([]);
   const [closedLoading, setClosedLoading] = useState(true);
@@ -566,6 +668,14 @@ export default function CallsPage() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [intervalSec, setIntervalSec] = useState<number>(15);
   const [momentumRefreshKey, setMomentumRefreshKey] = useState(0);
+  // HITS (recent target hits)
+  const [hitsRows, setHitsRows] = useState<ClosedCallNorm[]>([]);
+  const [hitsLoading, setHitsLoading] = useState(false);
+  const [hitsErr, setHitsErr] = useState("");
+  // Trade-ideas sorting (per current 5 rows only)
+  const [sortMode, setSortMode] = useState<'none' | 'idea'>('none');
+  const [ideaScores, setIdeaScores] = useState<Record<string, number>>({});
+  const [ideaLoading, setIdeaLoading] = useState(false);
 
   // ========== OPEN: initial load ==========
   useEffect(() => {
@@ -574,35 +684,28 @@ export default function CallsPage() {
       setLoading(true);
       setErr("");
       try {
-        const url = `/api/calls?status=open${searchTicker ? `&ticker=${encodeURIComponent(searchTicker)}` : ""}`;
+        // Use unique-open-calls endpoint with pagination (5 per page)
+        const url = `/api/open-calls/unique?limit=${pageSize}&page=${page}${searchTicker ? `&ticker=${encodeURIComponent(searchTicker)}` : ""}`;
         const rs = await fetch(url, { cache: "no-store" });
         const js = await rs.json();
-        if (!rs.ok) throw new Error(js.error || "Failed to load stocks");
-        const calls: OpenCall[] = Array.isArray(js) ? js : [];
-
-        const items = calls.map((call) => {
-          if (!call.ticker) return null;
-          return {
-            id: call.stock_id as string,
-            ticker: call.ticker as string,
-            entry: toNum(call.entry),
-            target: toNum(call.t1),
-            current: null,
-            openedAt: call.opened_at ?? null,
-            openedBy: call.opened_by ?? null,
-            openedById: call.opened_by_id ?? null,
-          } as OpenRow;
-        });
-
-        // De-duplicate by stock id to avoid duplicate React keys when multiple open calls exist per stock
-        const deduped = Array.from(
-          new Map((items.filter(Boolean) as OpenRow[]).map((row) => [row.id, row]))
-            .values()
-        );
-        setRows(deduped);
+        if (!rs.ok) throw new Error(js.error || "Failed to load open calls");
+        const itemsArr: OpenCall[] = Array.isArray(js?.items) ? js.items : [];
+        const mapped = itemsArr.map((call) => ({
+          id: String(call.stock_id ?? ""),
+          ticker: String(call.ticker ?? ""),
+          entry: toNum(call.entry),
+          target: toNum(call.t1),
+          current: null,
+          openedAt: call.opened_at ?? null,
+          openedBy: call.opened_by ?? null,
+          openedById: call.opened_by_id ?? null,
+        } as OpenRow)).filter((r) => r.id && r.ticker);
+        setRows(mapped);
+        setHasMore(Boolean(js?.hasMore));
+        setSortMode('none'); // reset sort on new page/filter
         // Fetch prices in small batches without blocking UI
         (async () => {
-          const tickers = deduped.map((r) => r.ticker);
+          const tickers = mapped.map((r) => r.ticker);
           const batchSize = 6;
           for (let i = 0; i < tickers.length; i += batchSize) {
             if (canceled) break;
@@ -624,7 +727,7 @@ export default function CallsPage() {
       }
     })();
     return () => { canceled = true; };
-  }, [searchTicker]);
+  }, [searchTicker, page]);
 
   // Manual/On-demand price refreshers
   const refreshOpenPrices = useCallback(async () => {
@@ -641,6 +744,97 @@ export default function CallsPage() {
       await sleep(0);
     }
   }, [rows]);
+
+  // Compute "Buy Now" idea scores for current 5 rows only
+  const computeIdeaScores = useCallback(async () => {
+    if (!rows.length) return;
+    setIdeaLoading(true);
+    try {
+      const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+      const normRVOL = (rv: number | null) => {
+        if (rv == null || !Number.isFinite(rv)) return 0;
+        return clamp(rv, 0, 5) / 5 * 100; // 0..5x -> 0..100
+      };
+      const normVWAP = (distPct: number | null) => {
+        if (distPct == null || !Number.isFinite(distPct)) return 50; // neutral
+        const cl = clamp(distPct, -2, 2); // −2%..+2%
+        return ((cl + 2) / 4) * 100; // map to 0..100 with 50 neutral
+      };
+
+      const calcRVOL = async (t: string) => {
+        const d = await fetchCandles(t, 'D', 21);
+        const vols = d.map((x:any)=>Number(x.v || 0)).filter((x:number)=>Number.isFinite(x) && x>0);
+        if (!vols.length) return null;
+        const todayVol = vols[vols.length - 1];
+        const avgVol = vols.length > 1 ? vols.slice(-11, -1).reduce((a:number,b:number)=>a+b,0) / Math.max(1, Math.min(10, vols.length-1)) : null;
+        return avgVol && todayVol ? (todayVol / avgVol) : null;
+      };
+      const calcVWAPDist = async (t: string) => {
+        const m = await fetchCandles(t, '1', 1);
+        if (!m || !m.length) return null;
+        let volSum=0, pvSum=0;
+        for (const k of m) {
+          const typical = (Number(k.h)+Number(k.l)+Number(k.c))/3;
+          const v = Number(k.v || 0);
+          if (!Number.isFinite(typical) || !Number.isFinite(v)) continue;
+          pvSum += typical * v; volSum += v;
+        }
+        const vwap = volSum>0 ? pvSum/volSum : null;
+        const last = m[m.length-1]?.c;
+        if (vwap == null || !Number.isFinite(last)) return null;
+        return ((Number(last) - vwap) / vwap) * 100;
+      };
+      const calcBuyPct = async (t: string) => {
+        try {
+          const r = await fetch(`/api/price/flow/${encodeURIComponent(t)}?window=5m`, { cache: 'no-store' });
+          const j = await r.json();
+          const buy = Number(j?.buyVol || 0);
+          const sell = Number(j?.sellVol || 0);
+          const total = buy + sell;
+          return total>0 ? (buy/total)*100 : 0;
+        } catch { return 0; }
+      };
+
+      // Parallel per-ticker fetches for current 5
+      const tickers = rows.map(r=>r.ticker);
+      const [buyPcts, rvols, vwapDists, techs] = await Promise.all([
+        Promise.all(tickers.map(calcBuyPct)),
+        Promise.all(tickers.map(calcRVOL)),
+        Promise.all(tickers.map(calcVWAPDist)),
+        Promise.all(tickers.map(async (t)=>{
+          try {
+            const r = await fetch(`/api/ta/indicators/${encodeURIComponent(t)}`, { cache: 'no-store' });
+            const j = await r.json();
+            return r.ok ? j : null;
+          } catch { return null; }
+        })),
+      ]);
+
+      const scores: Record<string, number> = {};
+      rows.forEach((row, i) => {
+        const buy = buyPcts[i] ?? 0;            // 0..100
+        const rvn = normRVOL(rvols[i] ?? null); // 0..100
+        const vwn = normVWAP(vwapDists[i] ?? null); // 0..100
+        const remainingPct = row.current != null && row.current > 0 && row.target != null ? ((row.target - row.current) / row.current) * 100 : null;
+        const upside = remainingPct != null ? clamp(remainingPct, 0, 10) : 0; // 0..10
+        const aboveEntry = row.entry != null && row.current != null && row.current >= row.entry ? 5 : 0; // small boost
+        const tech = techs[i] || {};
+        const rsi7 = Number(tech?.rsi7 ?? NaN);
+        const macdSlope3 = Number(tech?.macdSlope3 ?? NaN);
+        const emaAligned = tech?.emaAligned ? 1 : 0;
+        const aboveEma20 = tech?.aboveEma20 ? 1 : 0;
+        const normRSI7 = Number.isFinite(rsi7) ? clamp(((rsi7 - 40) / 30) * 100, 0, 100) : 50;
+        const macdBonus = Number.isFinite(macdSlope3) && macdSlope3 > 0 ? 5 : 0;
+        const emaBonus = emaAligned && aboveEma20 ? 5 : 0;
+        const score = 0.4*buy + 0.25*rvn + 0.2*vwn + 0.1*normRSI7 + macdBonus + emaBonus + upside + aboveEntry;
+        scores[row.id] = score;
+      });
+      setIdeaScores(scores);
+      setSortMode('idea');
+    } finally { setIdeaLoading(false); }
+  }, [rows]);
+
+  // No row expansion; columns are resizable instead
 
   // ========== CLOSED: load + normalize (mount + 60s)
   const loadClosed = useCallback(async (alive: boolean, tickerFilter: string) => {
@@ -712,11 +906,50 @@ export default function CallsPage() {
   }, []);
 
   useEffect(() => {
+    if (tab !== 'closed') return;
     let alive = true;
     loadClosed(alive, searchTicker);
     const id = setInterval(() => loadClosed(alive, searchTicker), 60000);
     return () => { alive = false; clearInterval(id); };
-  }, [loadClosed, searchTicker]);
+  }, [loadClosed, searchTicker, tab]);
+
+  // ========== HITS: load when tab active ==========
+  useEffect(() => {
+    if (tab !== 'hits') return;
+    let alive = true;
+    (async () => {
+      setHitsLoading(true); setHitsErr("");
+      try {
+        const url = `/api/calls?status=closed&outcome=target_hit&limit=50&page=1${searchTicker ? `&ticker=${encodeURIComponent(searchTicker)}` : ''}`;
+        const rs = await fetch(url, { cache: 'no-store' });
+        const js = await rs.json();
+        if (!rs.ok) throw new Error(js?.error || 'Failed to load hits');
+        const calls: ClosedCall[] = Array.isArray(js) ? js : [];
+        const normalized: ClosedCallNorm[] = calls.map((c) => ({
+          id: String(c.id),
+          ticker: c.ticker,
+          stock_id: c.stock_id ?? null,
+          type: c.type ?? null,
+          entry_price: toNum(c.entry ?? c.entry_price),
+          target_price: toNum(c.t1 ?? c.target ?? c.target_price),
+          stop_loss: toNum(c.stop ?? c.stop_loss),
+          opened_at: c.opened_at ?? null,
+          closed_at: c.closed_at ?? null,
+          outcome: c.outcome ?? null,
+          note: c.note ?? null,
+          result_pct: toNum(c.result_pct),
+          current_price: null,
+          opened_by: c.opened_by ?? null,
+          opened_by_id: c.opened_by_id ?? null,
+        }));
+        // Sort by closed_at desc
+        normalized.sort((a,b)=> (b.closed_at||'').localeCompare(a.closed_at||''));
+        if (alive) setHitsRows(normalized);
+      } catch (e: any) { if (alive) setHitsErr(e?.message || 'Failed to load hits'); }
+      finally { if (alive) setHitsLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [tab, searchTicker]);
 
   const refreshClosedPrices = useCallback(async () => {
     if (closedRows.length === 0) return;
@@ -729,11 +962,15 @@ export default function CallsPage() {
   const handleRefreshPrices = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refreshOpenPrices(), refreshClosedPrices()]);
+      if (tab === 'open') {
+        await refreshOpenPrices();
+      } else if (tab === 'closed') {
+        await refreshClosedPrices();
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [refreshOpenPrices, refreshClosedPrices]);
+  }, [refreshOpenPrices, refreshClosedPrices, tab]);
 
   // Optional auto-refresh timer controlled by UI
   useEffect(() => {
@@ -741,10 +978,10 @@ export default function CallsPage() {
     const ms = Math.max(5, Number(intervalSec) || 15) * 1000;
     const id = setInterval(() => {
       handleRefreshPrices();
-      setMomentumRefreshKey((k) => k + 1);
+      if (tab === 'open') setMomentumRefreshKey((k) => k + 1);
     }, ms);
     return () => clearInterval(id);
-  }, [autoRefresh, intervalSec, handleRefreshPrices]);
+  }, [autoRefresh, intervalSec, handleRefreshPrices, tab]);
 
   // ========== UI ==========
   const openEmpty = !loading && !err && rows.length === 0;
@@ -838,6 +1075,14 @@ export default function CallsPage() {
             )}
           </form>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={computeIdeaScores} disabled={ideaLoading || rows.length === 0}>
+            {ideaLoading ? 'Scoring…' : 'Sort: Buy Now'}
+          </Button>
+          {sortMode === 'idea' && (
+            <Button variant="outline" size="sm" onClick={() => setSortMode('none')}>Clear Sort</Button>
+          )}
+        </div>
       </div>
 
       {/* OPEN TAB */}
@@ -851,32 +1096,107 @@ export default function CallsPage() {
               <table className="nf-table text-sm">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="p-2 border">Stock Ticker</th>
-                    <th className="p-2 border">Entry</th>
-                    <th className="p-2 border">Target</th>
-                    <th className="p-2 border">Fair Target</th>
-                    <th className="p-2 border">Target Fit</th>
-                    <th className="p-2 border">Fair ETA</th>
-                    <th className="p-2 border">ETA Days</th>
-                    <th className="p-2 border">Sugg Stop</th>
-                    <th className="p-2 border">R to Tgt</th>
-                    <th className="p-2 border">Target % (vs Entry)</th>
-                    <th className="p-2 border" title="(target - current) / current * 100">Remain % (vs Current)</th>
-                    <th className="p-2 border">Current Price</th>
-                    <th className="p-2 border">5m Momentum</th>
-                    <th className="p-2 border">Swing</th>
-                    <th className="p-2 border">Earnings %</th>
-                    <th className="p-2 border">Flow/RVOL/VWAP</th>
-                    <th className="p-2 border">Entry Status</th>
-                    <th className="p-2 border">Target Status</th>
-                    <th className="p-2 border">Latest Buzz</th>
-                    <th className="p-2 border">Latest News</th>
-                    <th className="p-2 border">Entry Date</th>
-                    <th className="p-2 border">Analyst</th>
+                    <th className="p-2 border relative" style={{ width: colW.ticker }}>
+                      Stock Ticker
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('ticker', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.entry }}>
+                      Entry
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('entry', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.target }}>
+                      Target
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('target', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.fairTarget }}>
+                      Fair Target
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('fairTarget', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.targetFit }}>
+                      Target Fit
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('targetFit', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.fairEta }}>
+                      Fair ETA
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('fairEta', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.etaDays }}>
+                      ETA Days
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('etaDays', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.stop }}>
+                      Sugg Stop
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('stop', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.rToTgt }}>
+                      R to Tgt
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('rToTgt', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.targetPct }}>
+                      Target % (vs Entry)
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('targetPct', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.remainPct }} title="(target - current) / current * 100">
+                      Remain % (vs Current)
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('remainPct', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.current }}>
+                      Current Price
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('current', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.momentum }}>
+                      5m Momentum
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('momentum', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.swing }}>
+                      Swing
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('swing', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.tech }}>
+                      Tech
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('tech', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.newsSent }}>
+                      News Sent.
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('newsSent', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.earningsPct }}>
+                      Earnings %
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('earningsPct', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.flow }}>
+                      Flow/RVOL/VWAP
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('flow', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.entryStatus }}>
+                      Entry Status
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('entryStatus', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.targetStatus }}>
+                      Target Status
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('targetStatus', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.buzz }}>
+                      Latest Buzz
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('buzz', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.news }}>
+                      Latest News
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('news', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.openedAt }}>
+                      Entry Date
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('openedAt', e.clientX)} />
+                    </th>
+                    <th className="p-2 border relative" style={{ width: colW.analyst }}>
+                      Analyst
+                      <span className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none" onMouseDown={(e)=>startResize('analyst', e.clientX)} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(({ id, ticker, entry, target, current, openedAt, openedBy, openedById }) => {
+                  {(sortMode === 'idea' ? [...rows].sort((a,b) => (ideaScores[b.id] ?? -1) - (ideaScores[a.id] ?? -1)) : rows)
+                    .map(({ id, ticker, entry, target, current, openedAt, openedBy, openedById }) => {
                     const targetPct =
                       entry != null && entry > 0 && target != null ? ((target - entry) / entry) * 100 : null;
                     // Remaining upside from CURRENT price (more intuitive for entry/hold decisions)
@@ -902,53 +1222,65 @@ export default function CallsPage() {
                     })();
 
                     return (
-                      <tr key={id} className="hover:bg-gray-50">
-                        <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="brand-link underline">{ticker}</Link></td>
-                        <td className="p-2 border">{fmt(entry)}</td>
-                        <td className="p-2 border">{fmt(target)}</td>
-                        <FairTargetCell t={ticker} entry={entry} target={target} />
-                        <FairEtaCell t={ticker} entry={entry} target={target} />
-                        <EtaDaysCell t={ticker} current={current} entry={entry} target={target} />
-                        <RiskCell t={ticker} entry={entry} target={target} />
-                        <td className="p-2 border">{fmt(targetPct)}</td>
-                        <td
-                          className="p-2 border"
-                          title={current != null && current > 0 && target != null ? `(( ${fmt(target)} - ${fmt(current)} ) / ${fmt(current)} ) * 100` : ''}
-                        >
-                          {fmt(remainingPct)}
-                        </td>
-                        <td className="p-2 border bg-brand-soft">{fmt(current)}</td>
-                        <td className="p-2 border whitespace-nowrap"><Momentum5m t={ticker} refreshKey={momentumRefreshKey} /></td>
-                        <td className="p-2 border whitespace-nowrap"><SwingBadge t={ticker} /></td>
-                        <td className={`p-2 border ${
-                          earningsPct == null
-                            ? ''
-                            : earningsPct >= 0
-                            ? 'bg-green-100 font-medium'
-                            : 'bg-red-100 font-medium'
-                        }`}>{fmt(earningsPct)}</td>
-                        <td className="p-2 border"><RVOLVWAP t={ticker} /></td>
-                        <td className="p-2 border whitespace-nowrap">{entryStatus}</td>
-                        <td className={`p-2 border whitespace-nowrap ${targetClass}`}>{targetStatus}</td>
-                        <td className="p-2 border">
-                          <Buzz t={ticker} />
-                        </td>
-                        <td className="p-2 border">
-                          <News t={ticker} />
-                        </td>
-                        <td className="p-2 border">{ymd(openedAt)}</td>
-                        <td className="p-2 border whitespace-nowrap">
-                          {openedById ? (
-                            <Link href={`/analysts/${openedById}`} className="underline">{(openedBy ?? openedById).split('@')[0]}</Link>
-                          ) : (
-                            (openedBy ?? '-').split('@')[0]
-                          )}
-                        </td>
-                      </tr>
+                        <tr key={id} className="hover:bg-gray-50">
+                          <td className="p-2 border font-medium"><Link href={`/stocks/${id}`} className="brand-link underline">{ticker}</Link></td>
+                          <td className="p-2 border">{fmt(entry)}</td>
+                          <td className="p-2 border">{fmt(target)}</td>
+                          <FairTargetCell t={ticker} entry={entry} target={target} />
+                          <FairEtaCell t={ticker} entry={entry} target={target} />
+                          <EtaDaysCell t={ticker} current={current} entry={entry} target={target} />
+                          <RiskCell t={ticker} entry={entry} target={target} />
+                          <td className="p-2 border">{fmt(targetPct)}</td>
+                          <td
+                            className="p-2 border"
+                            title={current != null && current > 0 && target != null ? `(( ${fmt(target)} - ${fmt(current)} ) / ${fmt(current)} ) * 100` : ''}
+                          >
+                            {fmt(remainingPct)}
+                          </td>
+                          <td className="p-2 border bg-brand-soft">{fmt(current)}</td>
+                          <td className="p-2 border whitespace-nowrap"><Momentum5m t={ticker} refreshKey={momentumRefreshKey} /></td>
+                          <td className="p-2 border whitespace-nowrap"><SwingBadge t={ticker} /></td>
+                          <td className="p-2 border whitespace-nowrap"><TechChip t={ticker} /></td>
+                          <td className="p-2 border whitespace-nowrap"><NewsChip t={ticker} /></td>
+                          <td className={`p-2 border ${
+                            earningsPct == null
+                              ? ''
+                              : earningsPct >= 0
+                              ? 'bg-green-100 font-medium'
+                              : 'bg-red-100 font-medium'
+                          }`}>{fmt(earningsPct)}</td>
+                          <td className="p-2 border"><RVOLVWAP t={ticker} /></td>
+                          <td className="p-2 border whitespace-nowrap">{entryStatus}</td>
+                          <td className={`p-2 border whitespace-nowrap ${targetClass}`}>{targetStatus}</td>
+                          <td className="p-2 border">
+                            <Buzz t={ticker} />
+                          </td>
+                          <td className="p-2 border">
+                            <News t={ticker} />
+                          </td>
+                          <td className="p-2 border">{ymd(openedAt)}</td>
+                          <td className="p-2 border whitespace-nowrap">
+                            {openedById ? (
+                              <Link href={`/analysts/${openedById}`} className="underline">{(openedBy ?? openedById).split('@')[0]}</Link>
+                            ) : (
+                              (openedBy ?? '-').split('@')[0]
+                            )}
+                          </td>
+                        </tr>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {/* Pagination controls */}
+          {!loading && !err && rows.length > 0 && (
+            <div className="mt-3 flex items-center justify-between">
+              <div className="text-xs text-gray-600">Page {page}</div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+                <Button variant="outline" size="sm" disabled={!hasMore} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
             </div>
           )}
         </>
@@ -1010,6 +1342,53 @@ export default function CallsPage() {
                         <PriceSparkline ticker={c.ticker} width={120} height={36} />
                       </td>
                       <td className="p-2 border">{c.note ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* HITS TAB */}
+      {tab === "hits" && (
+        <>
+          {hitsLoading && <p className="p-2">Loading…</p>}
+          {hitsErr && <p className="p-2 text-red-500">{hitsErr}</p>}
+          {!hitsLoading && !hitsErr && hitsRows.length === 0 && <p className="p-2">No hits found.</p>}
+          {!hitsLoading && !hitsErr && hitsRows.length > 0 && (
+            <div className="nf-table-wrap overflow-x-auto rounded">
+              <table className="nf-table text-sm text-center">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="p-2 border">Stock Ticker</th>
+                    <th className="p-2 border">Analyst</th>
+                    <th className="p-2 border">Entry</th>
+                    <th className="p-2 border">Target</th>
+                    <th className="p-2 border">Opened</th>
+                    <th className="p-2 border">Closed</th>
+                    <th className="p-2 border">Result %</th>
+                    <th className="p-2 border">Hit</th>
+                    <th className="p-2 border">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hitsRows.map((c) => (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="p-2 border font-medium">
+                        <Link href={c.stock_id ? `/stocks/${c.stock_id}` : '#'} className="brand-link underline">{c.ticker}</Link>
+                      </td>
+                      <td className="p-2 border whitespace-nowrap">{c.opened_by ?? '-'}</td>
+                      <td className="p-2 border">{fnum(c.entry_price)}</td>
+                      <td className="p-2 border">{fnum(c.target_price)}</td>
+                      <td className="p-2 border">{fdate(c.opened_at)}</td>
+                      <td className="p-2 border">{fdate(c.closed_at)}</td>
+                      <td className={`p-2 border ${
+                        c.result_pct == null ? '' : (c.result_pct as number) >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'
+                      }`}>{fnum(c.result_pct)}</td>
+                      <td className="p-2 border">Target</td>
+                      <td className="p-2 border">{c.note ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>
