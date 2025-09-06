@@ -12,6 +12,9 @@ const closeCallSchema = z.object({
   close_price: z.number().positive().optional(),
   result_pct: z.number().optional(),
   note: z.string().optional(),
+  close_source: z.enum(["manual", "auto", "target", "stop"]).optional(),
+  confidence: z.number().int().min(0).max(100).optional(),
+  rationale: z.array(z.string()).optional(),
 });
 
 async function closeCall(
@@ -28,7 +31,7 @@ async function closeCall(
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  const { outcome, which_target_hit, close_price: bodyClosePrice, result_pct: bodyResultPct, note } = parsed.data;
+  const { outcome, which_target_hit, close_price: bodyClosePrice, result_pct: bodyResultPct, note, close_source, confidence, rationale } = parsed.data;
 
   try {
     // Load the call and ensure it is open
@@ -86,7 +89,10 @@ async function closeCall(
              result_pct = ?,
              closed_at = NOW(),
              closed_by_user_id = ?,
-             notes = COALESCE(?, notes)
+             notes = COALESCE(?, notes),
+             close_source = COALESCE(?, close_source),
+             confidence = COALESCE(?, confidence),
+             rationale = COALESCE(?, rationale)
        WHERE id = ?`,
 
       [
@@ -96,9 +102,21 @@ async function closeCall(
         finalResultPct,
         userId,
         note ?? null,
+        close_source ?? null,
+        confidence ?? null,
+        rationale ? JSON.stringify(rationale) : null,
         callId,
       ]
     );
+
+    // Audit trail entry
+    try {
+      const payload: any = { outcome, which_target_hit, close_price: finalClosePrice, result_pct: finalResultPct, close_source: close_source ?? null, confidence: confidence ?? null, rationale: rationale ?? [] };
+      await pool.execute(
+        `INSERT INTO call_notes (id, call_id, user_id, note, kind) VALUES (UUID(), ?, ?, ?, 'system')`,
+        [callId, userId, `Closed call: ${JSON.stringify(payload)}`]
+      );
+    } catch {}
     await pool.execute(
       `UPDATE stocks s
         JOIN stock_calls c0 ON c0.id = ?

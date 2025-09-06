@@ -51,7 +51,7 @@ export default function AllClosedCallsPage() {
         const r = await fetch(`/api/calls?status=closed`, { cache: "no-store" });
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || "Failed to load calls");
-        const all: Call[] = Array.isArray(j) ? j : [];
+        const all: Call[] = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : []);
         setCalls(all);
       } catch (e: any) {
         setErr(e.message || "Failed to load calls");

@@ -62,6 +62,11 @@ export default function CallsTab({ stockId, isOwner, ticker }: CallsTabProps) {
     setError("");
     try {
       const res = await fetchWithCancel(`/api/stocks/${stockId}/calls`, { cache: "no-store" });
+      // Ignore aborted in-flight request
+      if ((res as any)?.status === 499) {
+        setLoading(false);
+        return;
+      }
       if (!res.ok) {
         setError("Failed to fetch calls");
         setCalls([]);

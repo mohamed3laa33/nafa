@@ -95,7 +95,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ticker?: string
 
     const url = new URL(req.url);
     let tf = (url.searchParams.get('tf') || 'D').toUpperCase();
-    const normMap: Record<string,string> = { '1M':'1', '5M':'5', '15M':'15', '30M':'30', '1H':'60', '2H':'120' };
+    const normMap: Record<string,string> = { '1M':'1', '5M':'5', '15M':'15', '30M':'30', '1H':'60', '2H':'120', 'W':'W' };
     if (normMap[tf]) tf = normMap[tf];
 
     const map: any = {
@@ -106,6 +106,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ticker?: string
       '60': { i: '60m', r: '1mo' },
       '120': { i: '120m', r: '2mo' },
       'D': { i: '1d', r: '1y' },
+      'W': { i: '1wk', r: '2y' },
     };
     const cfg = map[tf] || map['D'];
 
@@ -114,7 +115,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ticker?: string
       candles = await yahooCandles(symbol, '60m', '2mo');
     }
     if (!candles || candles.length < 30) {
-      return NextResponse.json({ ticker: symbol, timeframe: tf, last: null, movingAverages: { buy: 0, sell: 0 }, indicators: { buy: 0, sell: 0, rsi: null, macdHist: null }, score: 0, summary: 'Neutral' });
+      return NextResponse.json({ ticker: symbol, timeframe: tf, last: null, movingAverages: { buy: 0, sell: 0 }, indicators: { buy: 0, sell: 0, rsi: null, macdHist: null }, score: 0, summary: 'Neutral', breadth: 0 });
     }
 
     const closes = candles.map(c => c.c);
@@ -138,6 +139,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ticker?: string
     if (Number.isFinite(hist)) { if (hist >= 0) { buyInd++; scoreInd += 1; } else { sellInd++; scoreInd -= 1; } }
 
     const score = scoreMA + scoreInd;
+    const breadth = buyMA + buyInd; // simple confirmation count
     const summary = labelFromScore(score);
 
     return NextResponse.json({
@@ -148,6 +150,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ticker?: string
       indicators: { buy: buyInd, sell: sellInd, rsi: rsiLast, macdHist: hist },
       score,
       summary,
+      breadth,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'failed' }, { status: 500 });

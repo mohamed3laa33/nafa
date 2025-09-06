@@ -27,6 +27,11 @@ export default function QuickOpenCallPage() {
   const [dirLabel, setDirLabel] = useState<'Long' | 'Short'>('Long');
   const [attachReason, setAttachReason] = useState(true);
   const [lastResp, setLastResp] = useState<any|null>(null);
+  const [fairValue, setFairValue] = useState<number | null>(null);
+  const [goodBuy, setGoodBuy] = useState<boolean | null>(null);
+  const [goodReasons, setGoodReasons] = useState<string[]>([]);
+  const [analystFair, setAnalystFair] = useState<{ mean: number | null; high: number | null; low: number | null; analysts: number | null; upsidePct: number | null } | null>(null);
+  const [fundFair, setFundFair] = useState<{ fair: number | null; reasons: string[] } | null>(null);
 
   if (!user || (user.role !== "admin" && user.role !== "analyst")) {
     return <div className="p-4 text-sm">You are not authorized to view this page.</div>;
@@ -94,6 +99,45 @@ export default function QuickOpenCallPage() {
       } finally {
         if (alive) setLoadingPrice(false);
       }
+    })();
+    return () => { alive = false; };
+  }, [ticker]);
+
+  // Blended fair value + good-to-buy check for context
+  useEffect(() => {
+    let alive = true;
+    const t = ticker.trim().toUpperCase();
+    if (!t) { setFairValue(null); setGoodBuy(null); setGoodReasons([]); return; }
+    (async () => {
+      try {
+        const r = await fetch(`/api/valuation/fair/${encodeURIComponent(t)}`, { cache: 'no-store' });
+        const j = await r.json();
+        if (!alive) return;
+        if (r.ok) {
+          setFairValue(typeof j?.fairValue === 'number' ? j.fairValue : null);
+          setGoodBuy(j?.isGoodBuy ?? null);
+          setGoodReasons(Array.isArray(j?.reasons) ? j.reasons : []);
+        } else { setFairValue(null); setGoodBuy(null); setGoodReasons([]); }
+      } catch { if (alive) { setFairValue(null); setGoodBuy(null); setGoodReasons([]); } }
+    })();
+    return () => { alive = false; };
+  }, [ticker]);
+
+  // Analyst fair (Yahoo target mean) and Fundamental fair (multiples heuristic)
+  useEffect(() => {
+    let alive = true;
+    const t = ticker.trim().toUpperCase();
+    if (!t) { setAnalystFair(null); setFundFair(null); return; }
+    (async () => {
+      try {
+        const [a, f] = await Promise.all([
+          fetch(`/api/valuation/analyst/${encodeURIComponent(t)}`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>null),
+          fetch(`/api/valuation/fundamental/${encodeURIComponent(t)}`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>null),
+        ]);
+        if (!alive) return;
+        if (a && !a.error) setAnalystFair({ mean: a.targetMean ?? null, high: a.targetHigh ?? null, low: a.targetLow ?? null, analysts: a.analysts ?? null, upsidePct: a.upsidePct ?? null }); else setAnalystFair(null);
+        if (f && !f.error) setFundFair({ fair: f.fairFundamental ?? null, reasons: Array.isArray(f.reasons)? f.reasons: [] }); else setFundFair(null);
+      } catch { if (alive) { setAnalystFair(null); setFundFair(null); } }
     })();
     return () => { alive = false; };
   }, [ticker]);
@@ -172,11 +216,26 @@ export default function QuickOpenCallPage() {
           }
         }
         if (alive) setTargetFit(fit);
-        // Fair ETA in trading days using ATR distance
+        // Fair ETA in trading days using velocity model (ATR blended with recent close-to-close move and momentum)
         if (alive) {
-          const days = atr && fair != null && Number.isFinite(base as number)
-            ? Math.max(1, Math.ceil(Math.abs((fair as number) - (base as number)) / atr))
-            : null;
+          let avgAbsMove = 0, nAbs = 0;
+          for (let i=1;i<closes.length;i++){ const d = Math.abs(closes[i]-closes[i-1]); if (Number.isFinite(d)) { avgAbsMove += d; nAbs++; } }
+          avgAbsMove = nAbs>0 ? (avgAbsMove/nAbs) : 0;
+          let v = (atr != null ? Math.max(atr*0.6, avgAbsMove) : avgAbsMove);
+          try {
+            const ind = await fetch(`/api/ta/indicators/${encodeURIComponent(t)}`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({}));
+            const emaAligned = !!ind?.emaAligned;
+            const vwapDistPct = Number.isFinite(ind?.vwapDistPct) ? Number(ind.vwapDistPct) : null;
+            const macdSlope3 = Number.isFinite(ind?.macdSlope3) ? Number(ind.macdSlope3) : null;
+            let m = 1.0;
+            if (emaAligned) m += 0.15;
+            if (macdSlope3 != null) m += (dir === 1 ? macdSlope3 : -macdSlope3) > 0 ? 0.10 : -0.05;
+            if (vwapDistPct != null) m += (dir === 1 ? vwapDistPct : -vwapDistPct) > 0 ? 0.05 : -0.05;
+            m = Math.min(1.6, Math.max(0.6, m));
+            v = v * m;
+          } catch {}
+          const dist = fair != null ? Math.abs((fair as number) - (base as number)) : null;
+          const days = (dist != null && v > 0) ? Math.max(1, Math.ceil(dist / v)) : null;
           setFairEta(days);
         }
       } catch { if (alive) { setFairTarget(null); setFairEta(null); setTargetFit('-'); } }
@@ -232,6 +291,33 @@ export default function QuickOpenCallPage() {
           <input value={ticker} onChange={(e)=>setTicker(e.target.value.toUpperCase())} className="w-full border rounded px-2 py-1" placeholder="AAPL" maxLength={8} required />
           <div className="text-xs text-gray-600 mt-1">
             {loadingPrice ? 'Fetching current price…' : hintPrice != null ? `Current: ${hintPrice.toFixed(2)}` : ''}
+          </div>
+        </div>
+        {/* Fair value and Good-to-Buy context */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="border rounded p-2">
+            <div className="text-gray-600">Fair Value</div>
+            <div className="font-medium">{fairValue==null? '—' : fairValue.toFixed(2)}</div>
+          </div>
+          <div className="border rounded p-2">
+            <div className="text-gray-600">Good To Buy</div>
+            <div className="mt-0.5">
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${goodBuy==null? 'bg-gray-100 text-gray-700' : goodBuy? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>{goodBuy==null? '—' : goodBuy? 'Good' : 'Wait'}</span>
+            </div>
+            {goodReasons.length>0 && <div className="mt-1 text-[11px] text-gray-600">{goodReasons.join(' • ')}</div>}
+          </div>
+          <div className="border rounded p-2">
+            <div className="text-gray-600">Analyst Fair (Yahoo)</div>
+            <div className="font-medium">{analystFair?.mean==null? '—' : analystFair.mean.toFixed(2)}</div>
+            <div className="text-[11px] text-gray-600 mt-0.5">
+              {analystFair?.upsidePct!=null ? `Upside ${analystFair.upsidePct.toFixed(1)}%` : ''}
+              {analystFair?.analysts!=null ? ` • ${analystFair.analysts} analysts` : ''}
+            </div>
+          </div>
+          <div className="border rounded p-2">
+            <div className="text-gray-600">Fundamental Fair</div>
+            <div className="font-medium">{fundFair?.fair==null? '—' : fundFair.fair.toFixed(2)}</div>
+            {fundFair?.reasons?.length ? <div className="text-[11px] text-gray-600 mt-0.5">{fundFair.reasons.join(' • ')}</div> : null}
           </div>
         </div>
         <div>

@@ -1,5 +1,5 @@
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 type FetchWithCancel = (url: string, options?: RequestInit) => Promise<Response>;
 
@@ -15,7 +15,8 @@ const useCancellableFetch = (): FetchWithCancel => {
     };
   }, []);
 
-  const fetchWithCancel: FetchWithCancel = (url, options) => {
+  // Stable function across renders to avoid re-triggering effects
+  const fetchWithCancel: FetchWithCancel = useCallback((url, options) => {
     // If there's an ongoing request, abort it
     if (controllerRef.current) {
       controllerRef.current.abort();
@@ -29,15 +30,14 @@ const useCancellableFetch = (): FetchWithCancel => {
 
     // Perform the fetch with the signal
     return fetch(url, { ...options, signal }).catch(error => {
-      // When the request is aborted, fetch throws an error.
-      // We can check if the error is an AbortError and handle it gracefully.
-      if (error.name === 'AbortError') {
-        console.log('Fetch aborted');
+      // Gracefully swallow aborts to avoid spurious error state updates
+      if (error && (error.name === 'AbortError' || error.code === 'ABORT_ERR')) {
+        return new Response(null, { status: 499, statusText: 'Client Closed Request' });
       }
       // Re-throw other errors
       throw error;
     });
-  };
+  }, []);
 
   return fetchWithCancel;
 };

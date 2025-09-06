@@ -30,24 +30,26 @@ async function getStock(
   let callRows: any[] = [];
   if (req.user.role === 'viewer') {
     const [rows]: any = await pool.execute(
-      `SELECT c.*
+      `SELECT c.*, u.id AS opened_by_id, COALESCE(u.username, u.email) AS opened_by
          FROM stock_calls c
+         LEFT JOIN users u ON u.id = c.opened_by_user_id
         WHERE c.stock_id = ?
           AND c.status = 'open'
           AND c.opened_by_user_id IN (
             SELECT f.following_id FROM follows f WHERE f.follower_id = ?
           )
-        ORDER BY c.opened_at DESC
+        ORDER BY c.opened_at DESC, c.id DESC
         LIMIT 1`,
       [stockId, req.user.id]
     );
     callRows = rows as any[];
   } else {
     const [rows]: any = await pool.execute(
-      `SELECT *
-         FROM stock_calls
-        WHERE stock_id = ? AND status = 'open'
-        ORDER BY opened_at DESC
+      `SELECT c.*, u.id AS opened_by_id, COALESCE(u.username, u.email) AS opened_by
+         FROM stock_calls c
+         LEFT JOIN users u ON u.id = c.opened_by_user_id
+        WHERE c.stock_id = ? AND c.status = 'open'
+        ORDER BY c.opened_at DESC, c.id DESC
         LIMIT 1`,
       [stockId]
     );

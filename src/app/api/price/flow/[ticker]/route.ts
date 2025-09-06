@@ -21,6 +21,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ ticker?: string
       ? 60
       : windowParam === '5m'
       ? 5
+      : windowParam === '2h' || windowParam === '120m'
+      ? 120
+      : windowParam === '4h' || windowParam === '240m'
+      ? 240
+      : windowParam === '1d' || windowParam === 'day' || windowParam === 'd'
+      ? null
       : null; // null -> full day
     let ok = false, data: any = null;
     for (const host of ['query1','query2']) {

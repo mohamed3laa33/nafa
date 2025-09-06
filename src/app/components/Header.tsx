@@ -42,6 +42,8 @@ export default function Header() {
         <Link href="/all-closed-calls">Closed Calls</Link>
         <Link href="/stocks">Stocks</Link>
         <Link href="/analysts">Analysts</Link>
+        <Link href="/buy-now">Buy Now</Link>
+        <Link href="/admin/backtest">Backtest</Link>
       </div>
 
       <div className="flex items-center gap-4">

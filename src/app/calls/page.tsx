@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import PriceBadge from "@/components/PriceBadge";
+import Visible from "@/components/Visible";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 
@@ -548,7 +549,7 @@ export default function CallsPage() {
   // Pagination for OPEN
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const pageSize = 5;
+  const pageSize = 5; // revert to 5 per page for snappier Open Calls
   // Column widths (resizable headers)
   const defaultColW: Record<string, number> = {
     ticker: 120, entry: 90, target: 90, fairTarget: 110, targetFit: 110,
@@ -745,92 +746,53 @@ export default function CallsPage() {
     }
   }, [rows]);
 
-  // Compute "Buy Now" idea scores for current 5 rows only
+  // Compute "Buy Now" using global screener across DB; rank current rows by those scores
   const computeIdeaScores = useCallback(async () => {
     if (!rows.length) return;
     setIdeaLoading(true);
     try {
-      const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-      const normRVOL = (rv: number | null) => {
-        if (rv == null || !Number.isFinite(rv)) return 0;
-        return clamp(rv, 0, 5) / 5 * 100; // 0..5x -> 0..100
-      };
-      const normVWAP = (distPct: number | null) => {
-        if (distPct == null || !Number.isFinite(distPct)) return 50; // neutral
-        const cl = clamp(distPct, -2, 2); // −2%..+2%
-        return ((cl + 2) / 4) * 100; // map to 0..100 with 50 neutral
-      };
-
-      const calcRVOL = async (t: string) => {
-        const d = await fetchCandles(t, 'D', 21);
-        const vols = d.map((x:any)=>Number(x.v || 0)).filter((x:number)=>Number.isFinite(x) && x>0);
-        if (!vols.length) return null;
-        const todayVol = vols[vols.length - 1];
-        const avgVol = vols.length > 1 ? vols.slice(-11, -1).reduce((a:number,b:number)=>a+b,0) / Math.max(1, Math.min(10, vols.length-1)) : null;
-        return avgVol && todayVol ? (todayVol / avgVol) : null;
-      };
-      const calcVWAPDist = async (t: string) => {
-        const m = await fetchCandles(t, '1', 1);
-        if (!m || !m.length) return null;
-        let volSum=0, pvSum=0;
-        for (const k of m) {
-          const typical = (Number(k.h)+Number(k.l)+Number(k.c))/3;
-          const v = Number(k.v || 0);
-          if (!Number.isFinite(typical) || !Number.isFinite(v)) continue;
-          pvSum += typical * v; volSum += v;
+      // 1) Try global screener for broad coverage
+      const r = await fetch(`/api/screener/buy-now?limit=1000&top=1000`, { cache: 'no-store' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || 'Failed');
+      const items: Array<{ ticker: string; score: number }> = Array.isArray(j?.items) ? j.items : [];
+      const scoreByTicker: Record<string, number> = {};
+      for (const it of items) scoreByTicker[it.ticker] = Number(it.score || 0);
+      const missing = rows.filter(row => scoreByTicker[row.ticker] == null).map(r => r.ticker);
+      // 2) Fallback: for missing tickers, use lightweight TA summary score
+      if (missing.length) {
+        const batch = async (syms: string[]) => Promise.all(syms.map(async (t) => {
+          try { const rr = await fetch(`/api/ta/${encodeURIComponent(t)}?tf=D`, { cache: 'no-store' }); const jj = await rr.json(); return { t, s: Number(jj?.score ?? 0) }; } catch { return { t, s: 0 }; }
+        }));
+        const step = 8;
+        for (let i=0;i<missing.length;i+=step){
+          const part = await batch(missing.slice(i,i+step));
+          for (const p of part) scoreByTicker[p.t] = p.s;
+          await sleep(0);
         }
-        const vwap = volSum>0 ? pvSum/volSum : null;
-        const last = m[m.length-1]?.c;
-        if (vwap == null || !Number.isFinite(last)) return null;
-        return ((Number(last) - vwap) / vwap) * 100;
-      };
-      const calcBuyPct = async (t: string) => {
-        try {
-          const r = await fetch(`/api/price/flow/${encodeURIComponent(t)}?window=5m`, { cache: 'no-store' });
-          const j = await r.json();
-          const buy = Number(j?.buyVol || 0);
-          const sell = Number(j?.sellVol || 0);
-          const total = buy + sell;
-          return total>0 ? (buy/total)*100 : 0;
-        } catch { return 0; }
-      };
-
-      // Parallel per-ticker fetches for current 5
-      const tickers = rows.map(r=>r.ticker);
-      const [buyPcts, rvols, vwapDists, techs] = await Promise.all([
-        Promise.all(tickers.map(calcBuyPct)),
-        Promise.all(tickers.map(calcRVOL)),
-        Promise.all(tickers.map(calcVWAPDist)),
-        Promise.all(tickers.map(async (t)=>{
-          try {
-            const r = await fetch(`/api/ta/indicators/${encodeURIComponent(t)}`, { cache: 'no-store' });
-            const j = await r.json();
-            return r.ok ? j : null;
-          } catch { return null; }
-        })),
-      ]);
-
+      }
       const scores: Record<string, number> = {};
-      rows.forEach((row, i) => {
-        const buy = buyPcts[i] ?? 0;            // 0..100
-        const rvn = normRVOL(rvols[i] ?? null); // 0..100
-        const vwn = normVWAP(vwapDists[i] ?? null); // 0..100
-        const remainingPct = row.current != null && row.current > 0 && row.target != null ? ((row.target - row.current) / row.current) * 100 : null;
-        const upside = remainingPct != null ? clamp(remainingPct, 0, 10) : 0; // 0..10
-        const aboveEntry = row.entry != null && row.current != null && row.current >= row.entry ? 5 : 0; // small boost
-        const tech = techs[i] || {};
-        const rsi7 = Number(tech?.rsi7 ?? NaN);
-        const macdSlope3 = Number(tech?.macdSlope3 ?? NaN);
-        const emaAligned = tech?.emaAligned ? 1 : 0;
-        const aboveEma20 = tech?.aboveEma20 ? 1 : 0;
-        const normRSI7 = Number.isFinite(rsi7) ? clamp(((rsi7 - 40) / 30) * 100, 0, 100) : 50;
-        const macdBonus = Number.isFinite(macdSlope3) && macdSlope3 > 0 ? 5 : 0;
-        const emaBonus = emaAligned && aboveEma20 ? 5 : 0;
-        const score = 0.4*buy + 0.25*rvn + 0.2*vwn + 0.1*normRSI7 + macdBonus + emaBonus + upside + aboveEntry;
-        scores[row.id] = score;
-      });
+      for (const row of rows) scores[row.id] = scoreByTicker[row.ticker] ?? -999; // ensure a deterministic order
       setIdeaScores(scores);
       setSortMode('idea');
+    } catch (e) {
+      // 3) Last resort: compute local TA-only scores for visible rows
+      try {
+        const scores: Record<string, number> = {};
+        const step = 6; const syms = rows.map(r=>r.ticker);
+        for (let i=0;i<syms.length;i+=step){
+          const part = syms.slice(i,i+step);
+          const out = await Promise.all(part.map(async (t)=>{
+            try { const rr = await fetch(`/api/ta/${encodeURIComponent(t)}?tf=D`, { cache: 'no-store' }); const jj = await rr.json(); return { t, s: Number(jj?.score ?? 0) }; } catch { return { t, s: 0 }; }
+          }));
+          for (const p of out) {
+            const row = rows.find(r=>r.ticker===p.t);
+            if (row) scores[row.id] = p.s;
+          }
+          await sleep(0);
+        }
+        setIdeaScores(scores); setSortMode('idea');
+      } catch (ee) { console.error(ee); }
     } finally { setIdeaLoading(false); }
   }, [rows]);
 
@@ -845,7 +807,7 @@ export default function CallsPage() {
       const rs = await fetch(url, { cache: 'no-store' });
       const js = await rs.json();
       if (!rs.ok) throw new Error('Failed to load closed calls');
-      const calls: ClosedCall[] = Array.isArray(js) ? js : [];
+      const calls: ClosedCall[] = Array.isArray(js?.data) ? js.data : (Array.isArray(js) ? js : []);
       const normalizedRows: ClosedCallNorm[] = await Promise.all(calls.map(async (c) => {
         const entry = toNum(c.entry ?? c.entry_price);
         const exit = toNum(c.exit ?? c.close ?? c.closed_price ?? c.exit_price);
@@ -924,7 +886,7 @@ export default function CallsPage() {
         const rs = await fetch(url, { cache: 'no-store' });
         const js = await rs.json();
         if (!rs.ok) throw new Error(js?.error || 'Failed to load hits');
-        const calls: ClosedCall[] = Array.isArray(js) ? js : [];
+        const calls: ClosedCall[] = Array.isArray(js?.data) ? js.data : (Array.isArray(js) ? js : []);
         const normalized: ClosedCallNorm[] = calls.map((c) => ({
           id: String(c.id),
           ticker: c.ticker,
@@ -1238,7 +1200,7 @@ export default function CallsPage() {
                             {fmt(remainingPct)}
                           </td>
                           <td className="p-2 border bg-brand-soft">{fmt(current)}</td>
-                          <td className="p-2 border whitespace-nowrap"><Momentum5m t={ticker} refreshKey={momentumRefreshKey} /></td>
+                          <td className="p-2 border whitespace-nowrap"><Visible><Momentum5m t={ticker} refreshKey={momentumRefreshKey} /></Visible></td>
                           <td className="p-2 border whitespace-nowrap"><SwingBadge t={ticker} /></td>
                           <td className="p-2 border whitespace-nowrap"><TechChip t={ticker} /></td>
                           <td className="p-2 border whitespace-nowrap"><NewsChip t={ticker} /></td>
@@ -1249,7 +1211,7 @@ export default function CallsPage() {
                               ? 'bg-green-100 font-medium'
                               : 'bg-red-100 font-medium'
                           }`}>{fmt(earningsPct)}</td>
-                          <td className="p-2 border"><RVOLVWAP t={ticker} /></td>
+                          <td className="p-2 border"><Visible><RVOLVWAP t={ticker} /></Visible></td>
                           <td className="p-2 border whitespace-nowrap">{entryStatus}</td>
                           <td className={`p-2 border whitespace-nowrap ${targetClass}`}>{targetStatus}</td>
                           <td className="p-2 border">
